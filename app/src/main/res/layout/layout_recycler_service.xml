@@ -1,48 +1,66 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:tools="http://schemas.android.com/tools"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingVertical="10dp"
-        android:gravity="center_vertical">
-
-    <ImageView
-            android:id="@+id/ivExpand"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
-            android:src="@drawable/icon_right"
-            android:visibility="invisible"/>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="@dimen/gatt_service_card_margin_h"
+    android:layout_marginBottom="@dimen/gatt_service_card_margin_bottom"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground"
+    android:minHeight="56dp"
+    app:cardBackgroundColor="@color/gatt_service_card_bg"
+    app:cardCornerRadius="10dp"
+    app:cardElevation="2dp">
 
     <androidx.appcompat.widget.LinearLayoutCompat
-            android:layout_width="match_parent"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="12dp">
+
+        <ImageView
+            android:id="@+id/ivExpand"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:contentDescription="@string/gatt_expand_service"
+            android:importantForAccessibility="no"
+            android:src="@drawable/icon_right"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_vertical">
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
 
-        <TextView
+            <TextView
                 android:id="@+id/tvServiceName"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="3"
                 android:textColor="@color/red"
+                android:textIsSelectable="false"
                 android:textSize="16sp"
-                android:textIsSelectable="true"
-                android:gravity="center_vertical"
-                android:ellipsize="end"
-                android:maxLines="3"
-                tools:text="服务名称"/>
+                tools:text="服务名称" />
 
-        <TextView
+            <TextView
                 android:id="@+id/tvServiceUUID"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="#666666"
                 android:layout_marginTop="4dp"
-                android:textSize="14sp"
-                android:textIsSelectable="true"
-                android:gravity="center_vertical"
                 android:ellipsize="end"
                 android:maxLines="3"
-                tools:text="服务名称"/>
+                android:textColor="@color/text_secondary"
+                android:textIsSelectable="false"
+                android:textSize="14sp"
+                tools:text="Service UUID" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
     </androidx.appcompat.widget.LinearLayoutCompat>
-</androidx.appcompat.widget.LinearLayoutCompat>
+</com.google.android.material.card.MaterialCardView>

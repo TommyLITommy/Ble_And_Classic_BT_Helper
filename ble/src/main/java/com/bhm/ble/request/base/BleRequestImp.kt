@@ -64,7 +64,9 @@ internal class BleRequestImp private constructor() : BleBaseRequest {
         private var instance: BleRequestImp? = BleRequestImp()
 
         fun get(): BleRequestImp {
-            return instance?: BleRequestImp()
+            return instance ?: BleRequestImp().also {
+                instance = it
+            }
         }
     }
 
@@ -158,7 +160,8 @@ internal class BleRequestImp private constructor() : BleBaseRequest {
                     }
                 }
             }
-            if (device == null || device?.deviceInfo == null) {
+            val targetDevice = device
+            if (targetDevice == null || targetDevice.deviceInfo == null) {
                 connectCallback.callConnectFail(
                     BleDevice(null,
                         "",
@@ -171,7 +174,7 @@ internal class BleRequestImp private constructor() : BleBaseRequest {
                 return@launchInMainThread
             }
             connect(
-                device!!,
+                targetDevice,
                 connectMillisTimeOut,
                 connectRetryCount,
                 connectRetryInterval,
@@ -179,27 +182,27 @@ internal class BleRequestImp private constructor() : BleBaseRequest {
             ) {
                 onConnectStart { bleDevice ->
                     connectCallback.callConnectStart(bleDevice)
-                    bleConnectedDeviceManager.getBleConnectedDevice(device!!)?.getBleEventCallback()?.callConnectStart(bleDevice)
+                    bleConnectedDeviceManager.getBleConnectedDevice(targetDevice)?.getBleEventCallback()?.callConnectStart(bleDevice)
                 }
                 onConnectSuccess { bleDevice, gatt ->
                     connectCallback.callConnectSuccess(bleDevice, gatt)
-                    bleConnectedDeviceManager.getBleConnectedDevice(device!!)?.getBleEventCallback()?.callConnected(bleDevice, gatt)
+                    bleConnectedDeviceManager.getBleConnectedDevice(targetDevice)?.getBleEventCallback()?.callConnected(bleDevice, gatt)
                 }
                 onDisConnecting { isActiveDisConnected, bleDevice, gatt, status ->
                     connectCallback.callDisConnecting(isActiveDisConnected, bleDevice, gatt, status)
-                    bleConnectedDeviceManager.getBleConnectedDevice(device!!)?.getBleEventCallback()?.callDisConnecting(
+                    bleConnectedDeviceManager.getBleConnectedDevice(targetDevice)?.getBleEventCallback()?.callDisConnecting(
                         isActiveDisConnected, bleDevice, gatt, status
                     )
                 }
                 onDisConnected { isActiveDisConnected, bleDevice, gatt, status ->
                     connectCallback.callDisConnected(isActiveDisConnected, bleDevice, gatt, status)
-                    bleConnectedDeviceManager.getBleConnectedDevice(device!!)?.getBleEventCallback()?.callDisConnected(
+                    bleConnectedDeviceManager.getBleConnectedDevice(targetDevice)?.getBleEventCallback()?.callDisConnected(
                         isActiveDisConnected, bleDevice, gatt, status
                     )
                 }
                 onConnectFail { bleDevice, connectFailType ->
                     connectCallback.callConnectFail(bleDevice, connectFailType)
-                    bleConnectedDeviceManager.getBleConnectedDevice(device!!)?.getBleEventCallback()?.callConnectFail(
+                    bleConnectedDeviceManager.getBleConnectedDevice(targetDevice)?.getBleEventCallback()?.callConnectFail(
                         bleDevice, connectFailType
                     )
                 }

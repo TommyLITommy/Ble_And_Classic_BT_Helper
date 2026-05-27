@@ -21,6 +21,7 @@ import com.bhm.support.sdk.common.BaseViewModel
 import com.chad.library.adapter.base.entity.node.BaseNode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.nio.charset.StandardCharsets
 import java.util.logging.Level
 
 
@@ -48,6 +49,15 @@ class DetailViewModel(application: Application) : BaseViewModel(application) {
         val gatt = BleManager.get().getBluetoothGatt(bleDevice)
         val list: MutableList<BaseNode> = arrayListOf()
         gatt?.services?.forEachIndexed { index, service ->
+            // 隐藏 BLE 标准服务：Generic Access(0x1800) / Generic Attribute(0x1801)
+            // 兼容不同库返回的 UUID 表示形式：可能是 "1800" / "1801" 或 "00001800-...".
+            val serviceUuidStr = service.uuid?.toString()?.lowercase().orEmpty()
+            if (serviceUuidStr == "1800" || serviceUuidStr == "1801" ||
+                serviceUuidStr.startsWith("00001800") || serviceUuidStr.startsWith("00001801")
+            ) {
+                return@forEachIndexed
+            }
+
             val childList: MutableList<BaseNode> = arrayListOf()
             service.characteristics?.forEachIndexed { position, characteristics ->
                 val characteristicNode = CharacteristicNode(
@@ -58,7 +68,6 @@ class DetailViewModel(application: Application) : BaseViewModel(application) {
                     characteristics.properties,
                     enableNotify = false,
                     enableIndicate = false,
-                    enableWrite = false
                 )
                 childList.add(characteristicNode)
             }
@@ -261,16 +270,26 @@ class DetailViewModel(application: Application) : BaseViewModel(application) {
     }
 
     /**
-     * 写数据
-     * 注意：因为分包后每一个包，可能是包含完整的协议，所以分包由业务层处理，组件只会根据包的长度和mtu值对比后是否拦截
+     * 写数据：[hexMode] 为 true 时按十六进制解析（可含空格等分隔符）；否则按 UTF-8 字节发送。
      */
-    fun writeData(bleDevice: BleDevice,
-                  node: CharacteristicNode,
-                  text: String) {
-
-        val data = text.toByteArray()
-        BleLogger.i("data is: ${BleUtil.bytesToHex(data)}")
-        val mtu = BleManager.get().getOptions()?.mtu?: DEFAULT_MTU
+    fun writeData(
+        bleDevice: BleDevice,
+        node: CharacteristicNode,
+        text: String,
+        hexMode: Boolean
+    ) {
+        val data: ByteArray = if (hexMode) {
+            val parsed = BleUtil.hexStringToByteArray(text)
+            if (parsed == null) {
+                addLogMsg(LogEntity(Level.OFF, "写失败：Hex 格式错误（需偶数位 0-9 A-F）"))
+                return
+            }
+            parsed
+        } else {
+            text.toByteArray(StandardCharsets.UTF_8)
+        }
+        BleLogger.i("write payload: ${BleUtil.bytesToHex(data)}")
+        val mtu = BleManager.get().getOptions()?.mtu ?: DEFAULT_MTU
         //mtu长度包含了ATT的opcode一个字节以及ATT的handle2个字节
         val maxLength = mtu - 3
         val listData: SparseArray<ByteArray> = BleUtil.subpackage(data, maxLength)

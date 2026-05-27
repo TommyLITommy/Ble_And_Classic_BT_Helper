@@ -200,10 +200,11 @@ internal class BleConnectRequest(
             )
             return
         }
+        val isConnecting = lastState == BleConnectLastState.ConnectIdle ||
+                lastState == BleConnectLastState.Connecting
         isActiveDisconnect.set(true)
         lastState = BleConnectLastState.Disconnect
-        if (lastState == BleConnectLastState.ConnectIdle ||
-            lastState == BleConnectLastState.Connecting) {
+        if (isConnecting) {
             val throwable = ActiveDisConnectedException("连接过程中断开")
             connectJob?.cancel(throwable)
             waitConnectJob?.cancel(throwable)
@@ -649,5 +650,6 @@ internal class BleConnectRequest(
      */
     private fun closeBluetoothGatt() {
         bluetoothGatt?.close()
+        bluetoothGatt = null
     }
 }

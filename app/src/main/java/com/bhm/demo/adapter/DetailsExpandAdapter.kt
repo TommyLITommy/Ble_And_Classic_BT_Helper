@@ -6,9 +6,13 @@
 package com.bhm.demo.adapter
 
 import android.bluetooth.BluetoothGattCharacteristic
+import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.LinearLayout
+import androidx.recyclerview.widget.RecyclerView
 import com.bhm.demo.R
 import com.bhm.demo.entity.CharacteristicNode
 import com.bhm.demo.entity.OperateType
@@ -58,17 +62,23 @@ class DetailsExpandAdapter(nodeList: MutableList<BaseNode>,
             val node = item as ServiceNode
             helper.setText(R.id.tvServiceName, "服务: (${node.serviceName})")
             helper.setText(R.id.tvServiceUUID, "ServiceUUID: ${node.serviceUUID}")
-            helper.setVisible(R.id.ivExpand, node.childNode?.isNotEmpty() == true)
-            if (node.isExpanded) {
-                helper.setImageResource(R.id.ivExpand, R.drawable.icon_down)
+            val expandable = node.childNode?.isNotEmpty() == true
+            helper.setVisible(R.id.ivExpand, expandable)
+            helper.setImageResource(
+                R.id.ivExpand,
+                if (node.isExpanded) R.drawable.icon_down else R.drawable.icon_right
+            )
+            helper.itemView.isClickable = expandable
+            helper.itemView.isFocusable = expandable
+            if (expandable) {
+                helper.itemView.setOnClickListener {
+                    val position = helper.layoutPosition
+                    if (position == RecyclerView.NO_POSITION) return@setOnClickListener
+                    getAdapter()?.expandOrCollapse(position, animate = true, notify = true)
+                }
             } else {
-                helper.setImageResource(R.id.ivExpand, R.drawable.icon_right)
+                helper.itemView.setOnClickListener(null)
             }
-        }
-
-        override fun onClick(helper: BaseViewHolder, view: View, data: BaseNode, position: Int) {
-            super.onClick(helper, view, data, position)
-            getAdapter()?.expandOrCollapse(position, animate = true, notify = true)
         }
     }
 
@@ -84,33 +94,37 @@ class DetailsExpandAdapter(nodeList: MutableList<BaseNode>,
 
         override fun convert(helper: BaseViewHolder, item: BaseNode) {
             val node = item as CharacteristicNode
+            applyCharacteristicItemSpacing(helper)
             helper.setText(R.id.tvCharacteristicName, "特征(${node.characteristicName})")
-            helper.setText(R.id.tvCharacteristicUUID, "CharacteristicUUID: ${node.characteristicUUID}")
-            helper.setText(R.id.tvCharacteristicProperties, "CharacteristicProperties: ${node.characteristicProperties}")
+            // UUID / properties 只展示内容，避免显示 "Characteristic" 字样占用空间
+            helper.setText(R.id.tvCharacteristicUUID, node.characteristicUUID)
+            helper.setText(R.id.tvCharacteristicProperties, node.characteristicProperties)
             helper.setGone(R.id.tvCharacteristicProperties, node.characteristicProperties.isEmpty())
 
-            val cbWrite = helper.getView<CheckBox>(R.id.cbWrite)
+            val btnWriteData = helper.getView<Button>(R.id.btnWriteData)
             val btnReadData = helper.getView<Button>(R.id.btnReadData)
             val cbNotify = helper.getView<CheckBox>(R.id.cbNotify)
             val cbIndicate = helper.getView<CheckBox>(R.id.cbIndicate)
-            cbWrite.isChecked = node.enableWrite
             cbNotify.isChecked = node.enableNotify
             cbIndicate.isChecked = node.enableIndicate
 
             val charaProp: Int = node.characteristicIntProperties
             helper.setGone(R.id.btnReadData, charaProp and BluetoothGattCharacteristic.PROPERTY_READ <= 0)
-            helper.setGone(R.id.cbWrite, charaProp and BluetoothGattCharacteristic.PROPERTY_WRITE <= 0 &&
+            helper.setGone(R.id.btnWriteData, charaProp and BluetoothGattCharacteristic.PROPERTY_WRITE <= 0 &&
                     charaProp and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE <= 0)
             helper.setGone(R.id.cbNotify, charaProp and BluetoothGattCharacteristic.PROPERTY_NOTIFY <= 0)
             helper.setGone(R.id.cbIndicate, charaProp and BluetoothGattCharacteristic.PROPERTY_INDICATE <= 0)
 
-            cbWrite.setOnClickListener { buttonView ->
-                if (ViewUtil.isInvalidClick(buttonView)) {
+            layoutCharacteristicActions(
+                helper.getView(R.id.llCharacteristicActions),
+                listOf(btnReadData, cbNotify, btnWriteData, cbIndicate)
+            )
+
+            btnWriteData.setOnClickListener {
+                if (ViewUtil.isInvalidClick(it)) {
                     return@setOnClickListener
                 }
-                node.enableWrite = cbWrite.isChecked
-                val isChecked = cbWrite.isChecked
-                operateCallback?.invoke(buttonView as CheckBox, OperateType.Write, isChecked, node)
+                operateCallback?.invoke(null, OperateType.Write, false, node)
             }
             btnReadData.setOnClickListener {
                 if (ViewUtil.isInvalidClick(it)) {
@@ -134,6 +148,77 @@ class DetailsExpandAdapter(nodeList: MutableList<BaseNode>,
                 val isChecked = cbIndicate.isChecked
                 operateCallback?.invoke(buttonView as CheckBox, OperateType.Indicate, isChecked, node)
             }
+        }
+
+        /**
+         * 按可见控件数量排列：
+         * - 仅 1 个且为 Button：占满整行；仅 1 个 Checkbox：居中
+         * - 2 个：左右各占一半（含 Button 时 Button 填满所属半区）
+         * - 3 个及以上：等分宽度 space-between（Button 填满各自区域）
+         */
+        private fun layoutCharacteristicActions(container: LinearLayout, orderedViews: List<View>) {
+            container.removeAllViews()
+            val visible = orderedViews.filter { it.visibility == View.VISIBLE }
+            val gap = (4 * container.resources.displayMetrics.density + 0.5f).toInt()
+            val actionHeight = container.resources.getDimensionPixelSize(R.dimen.gatt_action_height)
+
+            when (visible.size) {
+                0 -> Unit
+                1 -> {
+                    val view = visible[0]
+                    if (view is Button) {
+                        container.gravity = Gravity.CENTER_VERTICAL
+                        container.addView(
+                            view,
+                            LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                actionHeight
+                            )
+                        )
+                    } else {
+                        container.gravity = Gravity.CENTER
+                        container.addView(
+                            view,
+                            LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                actionHeight
+                            )
+                        )
+                    }
+                }
+                else -> {
+                    container.gravity = Gravity.CENTER_VERTICAL
+                    visible.forEachIndexed { index, view ->
+                        val lp = LinearLayout.LayoutParams(0, actionHeight, 1f)
+                        if (index > 0) {
+                            lp.marginStart = gap
+                        }
+                        lp.gravity = Gravity.CENTER
+                        container.addView(view, lp)
+                    }
+                }
+            }
+        }
+
+        private fun applyCharacteristicItemSpacing(helper: BaseViewHolder) {
+            val resources = helper.itemView.context.resources
+            val density = resources.displayMetrics.density
+            val groupGap = (resources.getDimension(R.dimen.gatt_char_group_spacing) + 0.5f).toInt()
+            val bottom = if (isLastCharacteristicInService(helper)) groupGap else (2 * density).toInt()
+            val lp = helper.itemView.layoutParams as? ViewGroup.MarginLayoutParams ?: return
+            if (lp.bottomMargin != bottom) {
+                lp.bottomMargin = bottom
+                helper.itemView.layoutParams = lp
+            }
+        }
+
+        private fun isLastCharacteristicInService(helper: BaseViewHolder): Boolean {
+            val adapter = getAdapter() ?: return true
+            val position = helper.layoutPosition
+            if (position == RecyclerView.NO_POSITION) return true
+            val nextIndex = position + 1
+            if (nextIndex >= adapter.data.size) return true
+            return adapter.data[nextIndex] is ServiceNode
         }
     }
 }

@@ -52,6 +52,8 @@ internal class BleScanRequest private constructor() : Request() {
 
     private val cancelScan = AtomicBoolean(false)
 
+    private val scanFailed = AtomicBoolean(false)
+
     private var scanJob: Job? = null
 
     private var waitScanJob: Job? = null
@@ -191,6 +193,7 @@ internal class BleScanRequest private constructor() : Request() {
         BleLogger.d("开始第${currentReyCount + 1}次扫描")
         isScanning.set(true)
         cancelScan.set(false)
+        scanFailed.set(false)
         var scanTime = scanMillisTimeOut?: (getBleOptions()?.scanMillisTimeOut?: DEFAULT_SCAN_MILLIS_TIMEOUT)
         //不支持无限扫描，可以设置scanMillisTimeOut + setScanRetryCountAndInterval
         if (scanTime <= 0) {
@@ -235,12 +238,17 @@ internal class BleScanRequest private constructor() : Request() {
                              scanFilters: ArrayList<ScanFilter>,
                              scanSetting: ScanSettings?,
                              throwable: Throwable?) {
-        isScanning.set(false)
         try {
             scanner?.stopScan(scanCallback)
         } catch (e: Exception) {
+            isScanning.set(false)
             BleLogger.e("停止扫描失败： ${e.message}")
             callScanFail(BleScanFailType.ScanError(-1, e))
+            return
+        }
+        if (scanFailed.getAndSet(false)) {
+            isScanning.set(false)
+            currentReyCount = 0
             return
         }
         if (ifContinueScan()) {
@@ -258,6 +266,7 @@ internal class BleScanRequest private constructor() : Request() {
                 }
             }
         } else {
+            isScanning.set(false)
             throwable?.let {
                 if (it !is CancellationException) {
                     BleLogger.e("扫描失败： ${it.message}")
@@ -324,7 +333,11 @@ internal class BleScanRequest private constructor() : Request() {
              * 7、errorCode = -1，具体看throwable
              */
             val e = UnDefinedException("扫描失败，请查验[android.bluetooth.le.ScanCallback错误码]")
-            BleLogger.e(e.message)
+            BleLogger.e("${e.message} errorCode=$errorCode")
+            scanFailed.set(true)
+            cancelScan.set(true)
+            scanJob?.cancel()
+            waitScanJob?.cancel(CancellationException(CANCEL_WAIT_JOB_MESSAGE))
             callScanFail(BleScanFailType.ScanError(errorCode, e))
         }
     }

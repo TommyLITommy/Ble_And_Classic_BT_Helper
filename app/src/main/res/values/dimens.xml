@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="button_corner_radius">8dp</dimen>
+    <dimen name="gatt_service_card_margin_h">4dp</dimen>
+    <dimen name="gatt_service_card_margin_bottom">10dp</dimen>
+    <dimen name="gatt_char_indent">20dp</dimen>
+    <dimen name="gatt_char_group_spacing">6dp</dimen>
+    <dimen name="gatt_action_height">40dp</dimen>
+</resources>

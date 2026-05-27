@@ -4,6 +4,7 @@ package com.bhm.ble
 
 import android.annotation.SuppressLint
 import android.app.Application
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothManager
@@ -570,6 +571,7 @@ class BleManager private constructor() {
      */
     fun setMtu(bleDevice: BleDevice, mtu: Int, bleMtuChangedCallback: BleMtuChangedCallback.() -> Unit) {
         checkInitialize()
+        val safeMtu = mtu.coerceIn(23, 512)
         if (mtu > 512) {
             BleLogger.w("requiredMtu should lower than 512 !")
         }
@@ -577,7 +579,7 @@ class BleManager private constructor() {
         if (mtu < 23) {
             BleLogger.w("requiredMtu should higher than 23 !")
         }
-        bleBaseRequest?.setMtu(bleDevice, mtu, bleMtuChangedCallback)
+        bleBaseRequest?.setMtu(bleDevice, safeMtu, bleMtuChangedCallback)
     }
 
     /**
@@ -926,6 +928,18 @@ class BleManager private constructor() {
      */
     @SuppressLint("MissingPermission")
     fun buildBleDeviceByDeviceAddress(deviceAddress: String): BleDevice {
+        if (!BluetoothAdapter.checkBluetoothAddress(deviceAddress)) {
+            BleLogger.e("Invalid bluetooth address: $deviceAddress")
+            return BleDevice(
+                null,
+                "",
+                deviceAddress,
+                0,
+                0,
+                null,
+                null
+            )
+        }
         val deviceInfo = bluetoothManager?.adapter?.getRemoteDevice(deviceAddress)
         return BleDevice(
             deviceInfo,

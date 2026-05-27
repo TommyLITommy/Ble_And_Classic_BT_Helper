@@ -9,29 +9,39 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothGatt
 import android.content.Intent
 import android.os.Build
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
 import android.widget.CheckBox
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DefaultItemAnimator
-import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bhm.ble.BleManager
 import com.bhm.ble.device.BleDevice
+import com.bhm.ble.utils.BleUtil
 import com.bhm.demo.BaseActivity
 import com.bhm.demo.R
 import com.bhm.demo.adapter.DetailsExpandAdapter
 import com.bhm.demo.adapter.LoggerListAdapter
 import com.bhm.demo.databinding.ActivityDetailBinding
+import com.bhm.demo.databinding.DialogWriteDataBinding
 import com.bhm.demo.entity.CharacteristicNode
+import com.bhm.demo.entity.LogEntity
 import com.bhm.demo.entity.OperateType
+import com.bhm.demo.entity.PresetWriteCommand
+import com.bhm.demo.utils.PresetWriteCommandStore
 import com.bhm.demo.vm.DetailViewModel
 import com.bhm.support.sdk.core.AppTheme
 import com.bhm.support.sdk.entity.MessageEvent
 import com.bhm.support.sdk.utils.ViewUtil
 import kotlinx.coroutines.launch
+import java.util.logging.Level
 
 
 /**
@@ -52,8 +62,6 @@ class DetailOperateActivity : BaseActivity<DetailViewModel, ActivityDetailBindin
 
     private var disConnectWhileClose = false // 关闭页面后是否断开连接
 
-    private var currentSendNode: CharacteristicNode? = null
-
     private var connectionPriority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED
 
     private var operateCallback: ((checkBox: CheckBox?,
@@ -68,8 +76,12 @@ class DetailOperateActivity : BaseActivity<DetailViewModel, ActivityDetailBindin
             window,
             window.decorView
         )
-        controller.isAppearanceLightStatusBars = true
+        controller.isAppearanceLightStatusBars = false
         controller.isAppearanceLightNavigationBars = true
+        viewBinding.toolbar.setNavigationOnClickListener {
+            onBackPressedDispatcher.onBackPressed()
+        }
+        updateLogPanelToggleIcon()
         bleDevice = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getParcelableExtra("data", BleDevice::class.java)
         } else {
@@ -87,6 +99,8 @@ class DetailOperateActivity : BaseActivity<DetailViewModel, ActivityDetailBindin
             append(getBleDevice().deviceName)
             append("\r\n")
             append("地址：${getBleDevice().deviceAddress}")
+            append("\r\n")
+            append("连接成功时已自动完成服务/特征发现，以下为当前 GATT 树")
         }
         initList()
     }
@@ -110,32 +124,19 @@ class DetailOperateActivity : BaseActivity<DetailViewModel, ActivityDetailBindin
     }
 
     private fun getBleDevice(): BleDevice {
-        return bleDevice!!
+        return bleDevice ?: run {
+            finish()
+            BleDevice(null, "", "", 0, 0, null, null)
+        }
     }
 
     private fun initList() {
         val layoutManager = LinearLayoutManager(applicationContext)
         layoutManager.orientation = LinearLayoutManager.VERTICAL
         viewBinding.recyclerView.layoutManager = layoutManager
-        viewBinding.recyclerView.addItemDecoration(DividerItemDecoration(applicationContext, DividerItemDecoration.VERTICAL))
-        operateCallback = { checkBox, operateType, isChecked, node ->
+        operateCallback = { _, operateType, isChecked, node ->
             when (operateType) {
-                is OperateType.Write -> {
-                    if (isChecked) {
-                        if (viewBinding.btnSend.isEnabled) {
-                            checkBox?.isChecked = false
-                            Toast.makeText(applicationContext, "请取消其他特征值写操作", Toast.LENGTH_SHORT).show()
-                        } else {
-                            viewBinding.btnSend.isEnabled = true
-                            viewBinding.etContent.isEnabled = true
-                            currentSendNode = node
-                        }
-                    } else {
-                        viewBinding.btnSend.isEnabled = false
-                        viewBinding.etContent.isEnabled = false
-                        currentSendNode = null
-                    }
-                }
+                is OperateType.Write -> showWriteDataDialog(node)
                 is OperateType.Read -> {
                     viewModel.readData(getBleDevice(), node)
                 }
@@ -155,11 +156,12 @@ class DetailOperateActivity : BaseActivity<DetailViewModel, ActivityDetailBindin
                 }
             }
         }
-        expandAdapter = DetailsExpandAdapter(viewModel.getListData(getBleDevice()), operateCallback)
+        expandAdapter = DetailsExpandAdapter(
+            viewModel.getListData(getBleDevice()),
+            operateCallback
+        )
         viewBinding.recyclerView.adapter = expandAdapter
-        if ((expandAdapter?.data?.size?: 0) > 0) {
-            expandAdapter?.expand(0)
-        }
+        // 默认不展开任何服务；用户点击服务 item 才展开/收起
 
         val logLayoutManager = LinearLayoutManager(applicationContext)
         logLayoutManager.orientation = LinearLayoutManager.VERTICAL
@@ -174,6 +176,7 @@ class DetailOperateActivity : BaseActivity<DetailViewModel, ActivityDetailBindin
     @SuppressLint("NotifyDataSetChanged")
     override fun initEvent() {
         super.initEvent()
+
         lifecycleScope.launch {
             viewModel.listLogStateFlow.collect {
                 viewModel.listLogData.add(it)
@@ -227,35 +230,142 @@ class DetailOperateActivity : BaseActivity<DetailViewModel, ActivityDetailBindin
             viewModel.readRssi(getBleDevice())
         }
 
-        viewBinding.btnSend.setOnClickListener {
-            if (ViewUtil.isInvalidClick(it)) {
-                return@setOnClickListener
-            }
-            val content = viewBinding.etContent.text.toString()
-            if (content.isEmpty()) {
-                Toast.makeText(applicationContext, "请输入数据", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            if (currentSendNode == null) {
-                Toast.makeText(applicationContext, "请选择特征值写操作", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            currentSendNode?.let { node ->
-                viewModel.writeData(
-                    getBleDevice(),
-                    node,
-                    content
-                )
-            }
-        }
     }
 
-    public fun showContent(view: View) {
+    fun showContent(@Suppress("UNUSED_PARAMETER") view: View) {
         if (viewBinding.llContent.visibility == View.VISIBLE) {
             viewBinding.llContent.visibility = View.GONE
         } else {
             viewBinding.llContent.visibility = View.VISIBLE
         }
+        updateLogPanelToggleIcon()
+    }
+
+    private fun updateLogPanelToggleIcon() {
+        val expanded = viewBinding.llContent.visibility == View.VISIBLE
+        viewBinding.ivToggleLog.setImageResource(
+            if (expanded) R.drawable.icon_down else R.drawable.icon_right
+        )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshGattTreeIfEmpty()
+    }
+
+    private fun refreshGattTreeIfEmpty() {
+        val dev = bleDevice ?: return
+        if (!BleManager.get().isConnected(dev)) return
+        if ((expandAdapter?.data?.size ?: 0) > 0) return
+        val newData = viewModel.getListData(dev)
+        if (newData.isEmpty()) return
+        expandAdapter = DetailsExpandAdapter(newData, operateCallback)
+        viewBinding.recyclerView.adapter = expandAdapter
+        // 默认不展开任何服务；用户点击服务 item 才展开/收起
+        viewModel.addLogMsg(LogEntity(Level.INFO, "已刷新 GATT 服务列表（${newData.size}）"))
+    }
+
+    private fun showWriteDataDialog(node: CharacteristicNode) {
+        if (!BleManager.get().isConnected(getBleDevice())) {
+            Toast.makeText(applicationContext, "设备未连接，无法写数据", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val dialogBinding = DialogWriteDataBinding.inflate(LayoutInflater.from(this))
+        dialogBinding.rgWriteFormat.setOnCheckedChangeListener { _, checkedId ->
+            dialogBinding.etWriteContent.hint = if (checkedId == dialogBinding.rbWriteHex.id) {
+                getString(R.string.hint_write_hex)
+            } else {
+                getString(R.string.hint_write_utf8)
+            }
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("写数据")
+            .setMessage(node.characteristicUUID)
+            .setView(dialogBinding.root)
+            .setNegativeButton("取消", null)
+            .setPositiveButton("发送", null)
+            .create()
+
+        fun bindPresetCommands() {
+            bindPresetButtons(
+                dialogBinding.llPresetCommands,
+                dialogBinding.tvPresetEmpty,
+            ) { preset ->
+                performWrite(node, preset.payload, preset.hexMode)
+            }
+        }
+        bindPresetCommands()
+
+        dialogBinding.btnManagePreset.setOnClickListener {
+            startActivity(Intent(this, PresetWriteCommandActivity::class.java)) { _, _ ->
+                bindPresetCommands()
+            }
+        }
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val content = dialogBinding.etWriteContent.text.toString()
+                val hexMode = dialogBinding.rbWriteHex.isChecked
+                performWrite(node, content, hexMode)
+            }
+        }
+        dialog.show()
+    }
+
+    private fun bindPresetButtons(
+        container: ViewGroup,
+        emptyView: View,
+        onPresetClick: (PresetWriteCommand) -> Unit,
+    ) {
+        container.removeAllViews()
+        val presets = PresetWriteCommandStore.loadAll(applicationContext)
+        emptyView.visibility = if (presets.isEmpty()) View.VISIBLE else View.GONE
+        val marginVertical = dp(4)
+        presets.forEach { preset ->
+            val button = Button(this).apply {
+                text = preset.name
+                isAllCaps = false
+                textSize = 13f
+                background = ContextCompat.getDrawable(context, R.drawable.bg_preset_command_button)
+                backgroundTintList = null
+                setTextColor(ContextCompat.getColor(context, R.color.preset_btn_text))
+                val paddingH = dp(12)
+                val paddingV = dp(10)
+                setPadding(paddingH, paddingV, paddingH, paddingV)
+                minHeight = dp(44)
+                isClickable = true
+                isFocusable = true
+                layoutParams = ViewGroup.MarginLayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    topMargin = marginVertical
+                    bottomMargin = marginVertical
+                }
+                setOnClickListener {
+                    if (ViewUtil.isInvalidClick(it)) return@setOnClickListener
+                    onPresetClick(preset)
+                }
+            }
+            container.addView(button)
+        }
+    }
+
+    private fun performWrite(node: CharacteristicNode, content: String, hexMode: Boolean) {
+        if (content.isBlank()) {
+            Toast.makeText(applicationContext, "请输入数据", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (hexMode && BleUtil.hexStringToByteArray(content) == null) {
+            Toast.makeText(applicationContext, getString(R.string.write_hex_invalid), Toast.LENGTH_SHORT).show()
+            return
+        }
+        viewModel.writeData(getBleDevice(), node, content, hexMode)
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density + 0.5f).toInt()
     }
 
     /**
@@ -264,7 +374,7 @@ class DetailOperateActivity : BaseActivity<DetailViewModel, ActivityDetailBindin
     override fun onMessageEvent(event: MessageEvent?) {
         super.onMessageEvent(event)
         event?.let {
-            val device = it.data as BleDevice
+            val device = it.data as? BleDevice ?: return
             if (getBleDevice() == device) {
                 BleManager.get().close(getBleDevice())
                 setResult(0, null)

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingVertical="10dp"
+    android:paddingHorizontal="4dp">
+
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvPresetName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/black"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            tools:text="开灯" />
+
+        <TextView
+            android:id="@+id/tvPresetPayload"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="#666666"
+            android:textSize="12sp"
+            android:maxLines="2"
+            android:ellipsize="end"
+            tools:text="Hex: 01 00 ff" />
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
+    <Button
+        android:id="@+id/btnEdit"
+        android:layout_width="56dp"
+        android:layout_height="36dp"
+        android:layout_marginStart="8dp"
+        android:padding="0dp"
+        android:text="@string/preset_edit"
+        android:textSize="12sp"
+        android:textColor="@color/white"
+        android:background="@drawable/bg_button_primary" />
+
+    <Button
+        android:id="@+id/btnDelete"
+        android:layout_width="56dp"
+        android:layout_height="36dp"
+        android:layout_marginStart="6dp"
+        android:padding="0dp"
+        android:text="@string/preset_delete"
+        android:textSize="12sp"
+        android:textColor="@color/white"
+        android:background="@drawable/bg_button_danger" />
+</androidx.appcompat.widget.LinearLayoutCompat>

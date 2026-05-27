@@ -23,6 +23,11 @@
         </activity>
         <activity android:name="com.bhm.demo.ui.OptionSettingActivity" />
         <activity android:name="com.bhm.demo.ui.DetailOperateActivity" />
+        <activity android:name="com.bhm.demo.ui.ScanBroadcastActivity" />
+        <activity
+                android:name="com.bhm.demo.ui.PresetWriteCommandActivity"
+                android:exported="false"
+                android:label="@string/preset_manage_title" />
     </application>
 
 </manifest>

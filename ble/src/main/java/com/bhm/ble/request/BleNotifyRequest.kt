@@ -211,6 +211,23 @@ internal class BleNotifyRequest(
         val descriptorList = characteristic.descriptors
         BleLogger.d("descriptor size is ${descriptorList.size}")
         if (bleDescriptorGetType == BleDescriptorGetType.AllDescriptor && descriptorList.isNotEmpty()) {
+            val descriptor = characteristic.getDescriptor(UUID.fromString(UUID_CLIENT_CHARACTERISTIC_CONFIG_DESCRIPTOR))
+                ?: descriptorList.firstOrNull()
+            if (descriptor != null) {
+                BleLogger.d("descriptor uuid is ${descriptor.uuid}")
+                val writeDescriptorCode = writeDescriptor(bluetoothGatt, descriptor, enable)
+                if (writeDescriptorCode != 0) {
+                    val exception = UnDefinedException(
+                        "$notifyUUID -> set Notify failed, code = $writeDescriptorCode",
+                        EXCEPTION_CODE_DESCRIPTOR_FAIL
+                    )
+                    cancelNotifyJob(notifyUUID, getTaskId(notifyUUID))
+                    BleLogger.e(exception.message)
+                    bleNotifyCallback?.callNotifyFail(bleDevice, notifyUUID, exception)
+                    return false
+                }
+                return true
+            }
             var allFail = true
             for (descriptor in descriptorList) {
                 descriptor?.let {

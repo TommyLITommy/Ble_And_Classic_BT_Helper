@@ -2,7 +2,30 @@
 <resources>
     <color name="teal_200">#FF03DAC5</color>
     <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
-    <color name="red">#FFFF0000</color>
+    <color name="black">#FF121212</color>
+    <color name="red">#FFE53935</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="primary">#FF1565C0</color>
+    <color name="primary_dark">#FF0D47A1</color>
+    <color name="accent">#FF26A69A</color>
+    <color name="surface">#FFF5F7FA</color>
+    <color name="card_bg">#FFFFFFFF</color>
+    <color name="text_primary">#DE000000</color>
+    <color name="text_secondary">#99000000</color>
+    <color name="text_hint">#61000000</color>
+    <color name="divider">#1F000000</color>
+    <color name="chip_stroke">#FFB0BEC5</color>
+    <color name="rssi_good">#FF43A047</color>
+    <color name="rssi_weak">#FFFF9800</color>
+    <color name="preset_btn_bg_normal">#FFE8EEF5</color>
+    <color name="preset_btn_bg_pressed">#FFD0DCE8</color>
+    <color name="preset_btn_ripple">#331565C0</color>
+    <color name="preset_btn_text">#FF1565C0</color>
+    <color name="preset_btn_stroke">#FFB0BEC5</color>
+    <color name="btn_primary_pressed">#FF2A2A2A</color>
+    <color name="btn_danger_pressed">#FFC62828</color>
+    <color name="btn_disabled">#FF9E9E9E</color>
+    <color name="btn_ripple_on_dark">#33FFFFFF</color>
+    <color name="gatt_service_card_bg">#FFFFFFFF</color>
+    <color name="gatt_characteristic_bg">#FFF0F4F8</color>
 </resources>

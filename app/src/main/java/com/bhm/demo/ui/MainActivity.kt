@@ -7,9 +7,9 @@ import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DefaultItemAnimator
-import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bhm.ble.device.BleDevice
 import com.bhm.ble.log.BleLogger
@@ -18,21 +18,27 @@ import com.bhm.demo.R
 import com.bhm.demo.adapter.DeviceListAdapter
 import com.bhm.demo.constants.LOCATION_PERMISSION
 import com.bhm.demo.databinding.ActivityMainBinding
+import com.bhm.demo.entity.ScanFilterMode
 import com.bhm.demo.vm.MainViewModel
 import com.bhm.support.sdk.utils.ViewUtil
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * 主页面
- * @author Buhuiming
- * @date :2023/5/24 15:39
+ * 主页面 — BLE 扫描与设备列表
  */
 class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>() {
 
     private var listAdapter: DeviceListAdapter? = null
 
-    private var autoOpenDetailsActivity = false
+    /**
+     * 连接成功后是否自动打开服务/特征页面；从地址栏连接时退出详情页将断开 GATT。
+     */
+    private data class PendingGattPage(val disconnectGattWhenLeavingDetail: Boolean)
+
+    private var pendingGattPage: PendingGattPage? = null
+
+    private var filterExpanded = false
 
     override fun createViewModel() = MainViewModel(application)
 
@@ -41,12 +47,9 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>() {
     override fun initData() {
         super.initData()
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        val controller = WindowCompat.getInsetsController(
-            window,
-            window.decorView
-        )
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
         controller.isAppearanceLightStatusBars = false
-        controller.isAppearanceLightNavigationBars = false
+        controller.isAppearanceLightNavigationBars = true
         ViewCompat.setOnApplyWindowInsetsListener(viewBinding.vTop) { _: View, insets: WindowInsetsCompat ->
             val statusBars = insets.getInsets(WindowInsetsCompat.Type.statusBars())
             val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
@@ -56,88 +59,171 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>() {
         }
         ViewCompat.requestApplyInsets(viewBinding.vTop)
         initList()
+        initSwipeRefresh()
+        initFilterUi()
         viewModel.initBle()
+        updateDeviceCount(0)
+    }
+
+    private fun initSwipeRefresh() {
+        viewBinding.swipeRefresh.setColorSchemeResources(R.color.primary)
+        viewBinding.swipeRefresh.setOnRefreshListener { restartScan(clearList = true) }
+    }
+
+    private fun initFilterUi() {
+        updateFilterExpandUi()
+        viewBinding.btnToggleFilter.setOnClickListener {
+            if (ViewUtil.isInvalidClick(it)) return@setOnClickListener
+            filterExpanded = !filterExpanded
+            updateFilterExpandUi()
+        }
+        viewBinding.chipGroupFilter.setOnCheckedStateChangeListener { _, checkedIds ->
+            val mode = when (checkedIds.firstOrNull()) {
+                R.id.chipFilterAll -> ScanFilterMode.ALL
+                R.id.chipFilterName -> ScanFilterMode.NAME_FILTER
+                else -> ScanFilterMode.NAMED_ONLY
+            }
+            viewModel.scanFilterMode = mode
+            viewBinding.tilNameFilter.visibility =
+                if (mode == ScanFilterMode.NAME_FILTER) View.VISIBLE else View.GONE
+            updateFilterSummary()
+        }
+        viewBinding.etNameFilter.doAfterTextChanged {
+            viewModel.nameFilterKeyword = it?.toString().orEmpty()
+            if (viewModel.scanFilterMode == ScanFilterMode.NAME_FILTER) {
+                updateFilterSummary()
+            }
+        }
+        updateFilterSummary()
+    }
+
+    private fun updateFilterExpandUi() {
+        viewBinding.llFilterExpandable.visibility =
+            if (filterExpanded) View.VISIBLE else View.GONE
+        viewBinding.btnToggleFilter.text = getString(
+            if (filterExpanded) R.string.scan_filter_collapse else R.string.scan_filter_expand
+        )
+        viewBinding.btnToggleFilter.setIconResource(
+            if (filterExpanded) R.drawable.icon_up else R.drawable.icon_down
+        )
+    }
+
+    private fun updateFilterSummary() {
+        val summary = when (viewModel.scanFilterMode) {
+            ScanFilterMode.ALL -> getString(R.string.scan_filter_summary_all)
+            ScanFilterMode.NAMED_ONLY -> getString(R.string.scan_filter_summary_named)
+            ScanFilterMode.NAME_FILTER -> {
+                val keyword = viewBinding.etNameFilter.text?.toString()?.trim().orEmpty()
+                if (keyword.isEmpty()) {
+                    getString(R.string.scan_filter_summary_name)
+                } else {
+                    getString(R.string.scan_filter_summary_name) + " · $keyword"
+                }
+            }
+        }
+        viewBinding.tvFilterSummary.text = summary
     }
 
     @SuppressLint("NotifyDataSetChanged")
     override fun initEvent() {
         super.initEvent()
+
         lifecycleScope.launch {
-            //添加扫描到的设备 刷新列表
-            viewModel.listDRStateFlow.collect {
-                if (it.deviceName != null && it.deviceAddress != null) {
-                    val position = (listAdapter?.itemCount?: 1) - 1
-                    listAdapter?.notifyItemInserted(position)
-                    viewBinding.recyclerView.smoothScrollToPosition(position)
+            viewModel.scanUpdateStateFlow.collect { update ->
+                update ?: return@collect
+                when {
+                    update.sortOrderChanged -> listAdapter?.notifyDataSetChanged()
+                    update.isNew -> {
+                        listAdapter?.notifyItemInserted(update.index)
+                        if (update.index == 0) {
+                            viewBinding.recyclerView.scrollToPosition(0)
+                        }
+                    }
+                    else -> listAdapter?.notifyItemChanged(update.index)
                 }
             }
         }
 
         lifecycleScope.launch {
-            viewModel.scanStopStateFlow.collect {
-                viewBinding.pbLoading.visibility = if (it) { View.INVISIBLE } else { View.VISIBLE }
-                viewBinding.btnStart.text = if (it) { "开启扫描" } else { "扫描中..." }
-                viewBinding.btnStart.isEnabled = it
-                viewBinding.btnConnect.isEnabled = it
-                viewBinding.btnSetting.isEnabled = it
-                viewBinding.btnStop.isEnabled = !it
+            viewModel.deviceCountStateFlow.collect { count ->
+                updateDeviceCount(count)
             }
         }
 
         lifecycleScope.launch {
-            //连接设备后 刷新列表
+            viewModel.scanStopStateFlow.collect { stopped ->
+                viewBinding.pbLoading.visibility = if (stopped) View.INVISIBLE else View.VISIBLE
+                viewBinding.swipeRefresh.isRefreshing = !stopped
+                viewBinding.btnStart.text =
+                    if (stopped) getString(R.string.scan_start) else getString(R.string.scanning)
+                viewBinding.btnStart.isEnabled = stopped
+                viewBinding.btnConnect.isEnabled = stopped
+                viewBinding.btnSetting.isEnabled = stopped
+                viewBinding.btnStop.isEnabled = !stopped
+                viewBinding.chipGroupFilter.isEnabled = stopped
+                viewBinding.etNameFilter.isEnabled = stopped
+            }
+        }
+
+        lifecycleScope.launch {
             viewModel.refreshStateFlow.collect {
                 delay(300)
                 dismissLoading()
                 if (it?.bleDevice == null) {
+                    pendingGattPage = null
                     listAdapter?.notifyDataSetChanged()
                     return@collect
                 }
-                it.bleDevice.let { bleDevice ->
-                    val position = listAdapter?.data?.indexOf(bleDevice) ?: -1
-                    if (position >= 0) {
-                        listAdapter?.notifyItemChanged(position)
+                val bleDevice = it.bleDevice
+                val position = listAdapter?.data?.indexOf(bleDevice) ?: -1
+                if (position >= 0) {
+                    listAdapter?.notifyItemChanged(position)
+                }
+                val isConnected = viewModel.isConnected(bleDevice)
+                if (bleDevice.deviceAddress == viewBinding.etAddress.text.toString()) {
+                    viewBinding.btnConnect.isEnabled = !isConnected
+                }
+                pendingGattPage?.let { pending ->
+                    if (isConnected) {
+                        openGattDetailPage(bleDevice, pending.disconnectGattWhenLeavingDetail)
                     }
-                    val isConnected= viewModel.isConnected(bleDevice)
-                    if (it.bleDevice.deviceAddress == viewBinding.etAddress.text.toString()) {
-                        viewBinding.btnConnect.isEnabled = !isConnected
-                    }
-                    if (isConnected && autoOpenDetailsActivity) {
-                        openDetails(it.bleDevice)
-                    }
-                    autoOpenDetailsActivity = false
+                    pendingGattPage = null
                 }
             }
         }
 
-        listAdapter?.addChildClickViewIds(R.id.btnConnect, R.id.btnOperate)
+        listAdapter?.addChildClickViewIds(R.id.btnConnect, R.id.btnOperate, R.id.btnPreview)
         listAdapter?.setOnItemChildClickListener { adapter, view, position ->
-            if (ViewUtil.isInvalidClick(view)) {
-                return@setOnItemChildClickListener
-            }
-            val bleDevice: BleDevice? = adapter.data[position] as BleDevice?
-            if (view.id == R.id.btnConnect) {
-                if (viewModel.isConnected(bleDevice)) {
-                    showLoading("断开中...")
-                    viewModel.disConnect(bleDevice)
-                } else {
-                    showLoading("连接中...")
-                    viewModel.connect(bleDevice)
+            if (ViewUtil.isInvalidClick(view)) return@setOnItemChildClickListener
+            val bleDevice = adapter.data[position] as? BleDevice ?: return@setOnItemChildClickListener
+            when (view.id) {
+                R.id.btnConnect -> {
+                    if (viewModel.isConnected(bleDevice)) {
+                        showLoading("断开中...")
+                        viewModel.disConnect(bleDevice)
+                    } else {
+                        showLoading("连接中...")
+                        pendingGattPage = PendingGattPage(disconnectGattWhenLeavingDetail = false)
+                        viewModel.connect(bleDevice)
+                    }
                 }
-            } else if (view.id == R.id.btnOperate) {
-                openDetails(bleDevice)
+                R.id.btnOperate -> openGattDetailPage(bleDevice, disconnectGattWhenLeavingDetail = false)
+                R.id.btnPreview -> ScanBroadcastActivity.start(this@MainActivity, bleDevice)
             }
+        }
+
+        listAdapter?.setOnItemClickListener { adapter, _, position ->
+            val bleDevice = adapter.data[position] as? BleDevice ?: return@setOnItemClickListener
+            ScanBroadcastActivity.start(this@MainActivity, bleDevice)
         }
 
         viewBinding.btnConnect.setOnClickListener {
-            if (ViewUtil.isInvalidClick(it)) {
-                return@setOnClickListener
-            }
+            if (ViewUtil.isInvalidClick(it)) return@setOnClickListener
             requestPermission(
                 LOCATION_PERMISSION,
                 {
                     BleLogger.d("获取到了权限")
-                    val address = viewBinding.etAddress.text.toString()
+                    val address = viewBinding.etAddress.text.toString().trim()
                     if (address.isEmpty()) {
                         Toast.makeText(application, "请输入设备地址", Toast.LENGTH_SHORT).show()
                         return@requestPermission
@@ -146,65 +232,63 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>() {
                         Toast.makeText(application, "请输入正确的设备地址", Toast.LENGTH_SHORT).show()
                         return@requestPermission
                     }
-                    autoOpenDetailsActivity = true
+                    pendingGattPage = PendingGattPage(disconnectGattWhenLeavingDetail = true)
                     showLoading("连接中...")
-//            viewModel.startScanAndConnect(this@MainActivity)
-                    viewModel.connect(viewBinding.etAddress.text.toString())
-
-                }, {
-                    BleLogger.w("缺少定位权限")
-                }
+                    viewModel.connect(address)
+                },
+                { BleLogger.w("缺少定位权限") }
             )
         }
 
         viewBinding.btnSetting.setOnClickListener {
-            if (ViewUtil.isInvalidClick(it)) {
-                return@setOnClickListener
-            }
+            if (ViewUtil.isInvalidClick(it)) return@setOnClickListener
             startActivity(Intent(this@MainActivity, OptionSettingActivity::class.java))
         }
 
         viewBinding.btnStart.setOnClickListener {
-            if (ViewUtil.isInvalidClick(it)) {
-                return@setOnClickListener
-            }
-            listAdapter?.notifyItemRangeRemoved(0, viewModel.listDRData.size)
-            viewModel.listDRData.clear()
-            viewModel.startScan(this@MainActivity)
+            if (ViewUtil.isInvalidClick(it)) return@setOnClickListener
+            restartScan(clearList = true)
         }
 
         viewBinding.btnStop.setOnClickListener {
-            if (ViewUtil.isInvalidClick(it)) {
-                return@setOnClickListener
-            }
+            if (ViewUtil.isInvalidClick(it)) return@setOnClickListener
             viewModel.stopScan()
         }
     }
 
     private fun initList() {
         val layoutManager = LinearLayoutManager(this)
-        layoutManager.orientation = LinearLayoutManager.VERTICAL
-        viewBinding.recyclerView.setHasFixedSize(true)
         viewBinding.recyclerView.layoutManager = layoutManager
-        viewBinding.recyclerView.addItemDecoration(DividerItemDecoration(this, DividerItemDecoration.VERTICAL))
-        //解决RecyclerView局部刷新时闪烁
         (viewBinding.recyclerView.itemAnimator as DefaultItemAnimator).supportsChangeAnimations = false
         listAdapter = DeviceListAdapter(viewModel.listDRData)
         viewBinding.recyclerView.adapter = listAdapter
     }
 
-    /**
-     * 打开操作页面
-     */
-    private fun openDetails(bleDevice: BleDevice?) {
+    private fun updateDeviceCount(count: Int) {
+        viewBinding.tvDeviceCount.text = getString(R.string.scan_device_count, count)
+    }
+
+    /** 清空列表并重新开始扫描（开始扫描按钮 / 下拉刷新共用） */
+    private fun restartScan(clearList: Boolean) {
+        viewModel.nameFilterKeyword = viewBinding.etNameFilter.text?.toString().orEmpty()
+        if (clearList) {
+            val removedCount = viewModel.listDRData.size
+            viewModel.clearScanResults()
+            if (removedCount > 0) {
+                listAdapter?.notifyItemRangeRemoved(0, removedCount)
+            }
+        }
+        viewModel.refreshScan(this)
+    }
+
+    private fun openGattDetailPage(bleDevice: BleDevice?, disconnectGattWhenLeavingDetail: Boolean) {
         if (viewModel.isConnected(bleDevice)) {
             val intent = Intent(this@MainActivity, DetailOperateActivity::class.java)
             intent.putExtra("data", bleDevice)
-            intent.putExtra("disConnectWhileClose", autoOpenDetailsActivity)
+            intent.putExtra("disConnectWhileClose", disconnectGattWhenLeavingDetail)
             startActivity(intent) { _, resultIntent ->
                 if (resultIntent != null) {
                     showLoading("断开中...")
-                    //断开需要一定的时间，才可以连接，这里防止没断开完成，马上点击连接
                     lifecycleScope.launch {
                         delay(1200)
                         dismissLoading()
@@ -214,9 +298,7 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>() {
         } else {
             Toast.makeText(application, "设备未连接", Toast.LENGTH_SHORT).show()
             val index = listAdapter?.data?.indexOf(bleDevice) ?: -1
-            if (index >= 0) {
-                listAdapter?.notifyItemChanged(index)
-            }
+            if (index >= 0) listAdapter?.notifyItemChanged(index)
         }
     }
 

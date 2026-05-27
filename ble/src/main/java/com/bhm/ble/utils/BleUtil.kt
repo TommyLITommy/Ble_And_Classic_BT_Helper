@@ -84,9 +84,11 @@ object BleUtil {
      */
     @SuppressLint("MissingPermission")
     fun scanResultToBleDevice(scanResult: ScanResult): BleDevice {
+        val advertiseName = scanResult.scanRecord?.deviceName
         return BleDevice(
             deviceInfo = scanResult.device,
-            deviceName = scanResult.device?.name,
+            deviceName = advertiseName?.takeIf { it.isNotBlank() }
+                ?: scanResult.device?.name,
             deviceAddress = scanResult.device?.address,
             rssi = scanResult.rssi,
             timestampNanos = scanResult.timestampNanos,
@@ -122,11 +124,43 @@ object BleUtil {
     }
 
     /**
+     * 将十六进制文本转为字节数组。忽略空格、逗号、冒号、连字符；
+     * 支持整体 `0x` 前缀（仅当字符串以此开头时去掉一次）。
+     * @return 非法长度或字符时返回 null
+     */
+    fun hexStringToByteArray(hex: String): ByteArray? {
+        var s = hex.trim()
+        if (s.startsWith("0x", ignoreCase = true)) {
+            s = s.drop(2).trim()
+        }
+        s = s.replace(Regex("[\\s,:-]+"), "")
+        if (s.isEmpty()) return byteArrayOf()
+        if (s.length % 2 != 0) return null
+        val out = ByteArray(s.length / 2)
+        for (i in out.indices) {
+            val hi = parseHexNibble(s[i * 2]) ?: return null
+            val lo = parseHexNibble(s[i * 2 + 1]) ?: return null
+            out[i] = ((hi shl 4) or lo).toByte()
+        }
+        return out
+    }
+
+    private fun parseHexNibble(c: Char): Int? {
+        return when {
+            c in '0'..'9' -> c.code - '0'.code
+            c in 'a'..'f' -> c.code - 'a'.code + 10
+            c in 'A'..'F' -> c.code - 'A'.code + 10
+            else -> null
+        }
+    }
+
+    /**
      * 分包
      * @param data 需要分别的数据
      * @param packageLength 每个数据包最大长度
      */
     fun subpackage(data: ByteArray, packageLength: Int): SparseArray<ByteArray> {
+        require(packageLength > 0) { "packageLength must be greater than 0" }
         val listData: SparseArray<ByteArray>
         if (data.size > packageLength) {
             val pkgCount = if (data.size % packageLength == 0) {

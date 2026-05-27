@@ -15,8 +15,11 @@ import com.bhm.ble.device.BleDevice
 import com.bhm.ble.log.BleLogger
 import com.bhm.ble.utils.BleUtil
 import com.bhm.demo.BaseActivity
+import com.bhm.demo.R
 import com.bhm.demo.constants.LOCATION_PERMISSION
 import com.bhm.demo.entity.RefreshBleDevice
+import com.bhm.demo.entity.ScanDeviceUpdate
+import com.bhm.demo.entity.ScanFilterMode
 import com.bhm.support.sdk.common.BaseViewModel
 import com.bhm.support.sdk.entity.MessageEvent
 import kotlinx.coroutines.delay
@@ -34,23 +37,32 @@ import kotlin.coroutines.suspendCoroutine
  */
 class MainViewModel(private val application: Application) : BaseViewModel(application) {
 
-    private val listDRMutableStateFlow = MutableStateFlow(
-        BleDevice(null, null, null, null, null, null, null)
-    )
+    companion object {
+        /** 单次扫描窗口（毫秒），分段扫描可降低系统 SCAN_FAILED_SCANNING_TOO_FREQUENTLY 概率 */
+        private const val SCAN_SEGMENT_MILLIS = 12_000L
+        /** 分段重试次数，足够长；用户点「停止」会 cancelScan 结束整段会话 */
+        private const val SCAN_CONTINUOUS_RETRY_COUNT = 99_999
+        private const val SCAN_RETRY_INTERVAL_MILLIS = 400L
+    }
 
-    val listDRStateFlow: StateFlow<BleDevice> = listDRMutableStateFlow
+    private val scanUpdateMutableStateFlow = MutableStateFlow<ScanDeviceUpdate?>(null)
+    val scanUpdateStateFlow: StateFlow<ScanDeviceUpdate?> = scanUpdateMutableStateFlow
 
     val listDRData = mutableListOf<BleDevice>()
 
     private val scanStopMutableStateFlow = MutableStateFlow(true)
-
     val scanStopStateFlow: StateFlow<Boolean> = scanStopMutableStateFlow
+
+    private val deviceCountMutableStateFlow = MutableStateFlow(0)
+    val deviceCountStateFlow: StateFlow<Int> = deviceCountMutableStateFlow
 
     private val refreshMutableStateFlow = MutableStateFlow(
         RefreshBleDevice(null, null)
     )
-
     val refreshStateFlow: StateFlow<RefreshBleDevice?> = refreshMutableStateFlow
+
+    var scanFilterMode: ScanFilterMode = ScanFilterMode.NAMED_ONLY
+    var nameFilterKeyword: String = ""
 
     /**
      * 初始化蓝牙组件
@@ -58,19 +70,37 @@ class MainViewModel(private val application: Application) : BaseViewModel(applic
     fun initBle() {
         BleManager.get().init(application,
             BleOptions.Builder()
-                .setScanMillisTimeOut(5000)
+                .setScanMillisTimeOut(SCAN_SEGMENT_MILLIS)
+                .setScanRetryCountAndInterval(
+                    SCAN_CONTINUOUS_RETRY_COUNT,
+                    SCAN_RETRY_INTERVAL_MILLIS
+                )
                 .setConnectMillisTimeOut(5000)
-                //一般不推荐autoSetMtu，因为如果设置的等待时间会影响其他操作
-//                .setMtu(100, true)
                 .setMaxConnectNum(2)
                 .setConnectRetryCountAndInterval(2, 1000)
-                .setStopScanWhenStartConnect(false)
+                .setStopScanWhenStartConnect(true)
                 .setNeedCheckGps(true)
                 .build()
         )
         BleManager.get().registerBluetoothStateReceiver {
             onStateOff {
                 refreshMutableStateFlow.value = RefreshBleDevice(null, System.currentTimeMillis())
+            }
+        }
+    }
+
+    fun matchesFilter(bleDevice: BleDevice): Boolean {
+        return when (scanFilterMode) {
+            ScanFilterMode.ALL -> true
+            ScanFilterMode.NAMED_ONLY -> !bleDevice.deviceName.isNullOrBlank()
+            ScanFilterMode.NAME_FILTER -> {
+                val keyword = nameFilterKeyword.trim()
+                if (keyword.isEmpty()) {
+                    !bleDevice.deviceName.isNullOrBlank()
+                } else {
+                    bleDevice.deviceName?.contains(keyword, ignoreCase = true) == true ||
+                        bleDevice.deviceAddress?.contains(keyword, ignoreCase = true) == true
+                }
             }
         }
     }
@@ -104,9 +134,7 @@ class MainViewModel(private val application: Application) : BaseViewModel(applic
                 }
             )
         }
-        //有些设备GPS是关闭状态的话，申请定位权限之后，GPS是依然关闭状态，这里要根据GPS是否打开来跳转页面
         if (hasScanPermission && !BleUtil.isGpsOpen(application)) {
-            //跳转到系统GPS设置页面，GPS设置是全局的独立的，是否打开跟权限申请无关
             hasScanPermission = suspendCoroutine {
                 activity.startActivity(
                     Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
@@ -122,13 +150,11 @@ class MainViewModel(private val application: Application) : BaseViewModel(applic
             }
         }
         if (hasScanPermission && !BleManager.get().isBleEnable()) {
-            //跳转到系统GPS设置页面，GPS设置是全局的独立的，是否打开跟权限申请无关
             hasScanPermission = suspendCoroutine {
                 activity.startActivity(
                     Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
                 ) { _, _ ->
                     viewModelScope.launch {
-                        //打开蓝牙后需要一些时间才能获取到时开启状态，这里延时一下处理
                         delay(1000)
                         val enable = BleManager.get().isBleEnable()
                         BleLogger.i("是否打开了蓝牙: $enable")
@@ -148,12 +174,31 @@ class MainViewModel(private val application: Application) : BaseViewModel(applic
      * 开始扫描
      */
     fun startScan(activity: BaseActivity<*, *>) {
+        if (BleManager.get().isScanning()) {
+            BleLogger.w("扫描已在进行中")
+            return
+        }
+        launchScan(activity)
+    }
+
+    /**
+     * 下拉刷新：先停止当前扫描（若有），再重新开始扫描
+     */
+    fun refreshScan(activity: BaseActivity<*, *>) {
+        if (BleManager.get().isScanning()) {
+            stopScan()
+        }
+        launchScan(activity)
+    }
+
+    private fun launchScan(activity: BaseActivity<*, *>) {
         viewModelScope.launch {
             val hasScanPermission = hasScanPermission(activity)
             if (hasScanPermission) {
                 BleManager.get().startScan(getScanCallback(true))
             } else {
                 BleLogger.e("请检查权限、检查GPS开关、检查蓝牙开关")
+                scanStopMutableStateFlow.value = true
             }
         }
     }
@@ -165,35 +210,30 @@ class MainViewModel(private val application: Application) : BaseViewModel(applic
                 scanStopMutableStateFlow.value = false
             }
             onLeScan { bleDevice, _ ->
-                //可以根据currentScanCount是否已有清空列表数据
-                bleDevice.deviceName?.let { _ ->
-
+                if (!showData) return@onLeScan
+                val index = listDRData.indexOfFirst { it.deviceAddress == bleDevice.deviceAddress }
+                if (index >= 0) {
+                    val old = listDRData[index]
+                    if (old.rssi != bleDevice.rssi ||
+                        old.scanRecord?.contentEquals(bleDevice.scanRecord) != true
+                    ) {
+                        upsertDevice(bleDevice, isNew = false)
+                    }
                 }
             }
             onLeScanDuplicateRemoval { bleDevice, _ ->
-                bleDevice.deviceName?.let { _ ->
-                    if (showData) {
-                        listDRData.add(bleDevice)
-                        listDRMutableStateFlow.value = bleDevice
-                    }
+                if (!showData || !matchesFilter(bleDevice)) return@onLeScanDuplicateRemoval
+                val index = listDRData.indexOfFirst { it.deviceAddress == bleDevice.deviceAddress }
+                if (index < 0) {
+                    upsertDevice(bleDevice, isNew = true)
                 }
             }
-            onScanComplete { bleDeviceList, bleDeviceDuplicateRemovalList ->
-                //扫描到的数据是所有扫描次数的总和
-                bleDeviceList.forEach {
-                    it.deviceName?.let { deviceName ->
-                        BleLogger.i("bleDeviceList-> $deviceName, ${it.deviceAddress}")
-                    }
-                }
-                bleDeviceDuplicateRemovalList.forEach {
-                    it.deviceName?.let { deviceName ->
-                        BleLogger.e("bleDeviceDuplicateRemovalList-> $deviceName, ${it.deviceAddress}")
-                    }
-                }
+            onScanComplete { _, _ ->
                 scanStopMutableStateFlow.value = true
                 if (listDRData.isEmpty() && showData) {
-                    Toast.makeText(application, "没有扫描到数据", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(application, R.string.scan_empty, Toast.LENGTH_SHORT).show()
                 }
+                BleLogger.d("扫描会话结束")
             }
             onScanFail {
                 val msg: String = when (it) {
@@ -202,9 +242,7 @@ class MainViewModel(private val application: Application) : BaseViewModel(applic
                     is BleScanFailType.GPSDisable -> "设备未打开GPS定位"
                     is BleScanFailType.BleDisable -> "蓝牙未打开"
                     is BleScanFailType.AlReadyScanning -> "正在扫描"
-                    is BleScanFailType.ScanError -> {
-                        "${it.throwable?.message}"
-                    }
+                    is BleScanFailType.ScanError -> "${it.throwable?.message}"
                 }
                 BleLogger.e(msg)
                 Toast.makeText(application, msg, Toast.LENGTH_SHORT).show()
@@ -213,28 +251,60 @@ class MainViewModel(private val application: Application) : BaseViewModel(applic
         }
     }
 
+    fun clearScanResults() {
+        listDRData.clear()
+        deviceCountMutableStateFlow.value = 0
+        scanUpdateMutableStateFlow.value = null
+    }
+
+    /**
+     * 插入或更新设备，并按 RSSI 降序排序（信号越强越靠前）
+     */
+    private fun upsertDevice(bleDevice: BleDevice, isNew: Boolean) {
+        val address = bleDevice.deviceAddress ?: return
+        val oldIndex = listDRData.indexOfFirst { it.deviceAddress == address }
+        if (oldIndex >= 0) {
+            listDRData[oldIndex] = bleDevice
+        } else {
+            listDRData.add(bleDevice)
+        }
+        sortDevicesByRssi()
+        val newIndex = listDRData.indexOfFirst { it.deviceAddress == address }
+        deviceCountMutableStateFlow.value = listDRData.size
+        val sortOrderChanged = oldIndex >= 0 && oldIndex != newIndex
+        scanUpdateMutableStateFlow.value = ScanDeviceUpdate(
+            bleDevice = bleDevice,
+            isNew = isNew,
+            index = newIndex,
+            sortOrderChanged = sortOrderChanged
+        )
+    }
+
+    private fun sortDevicesByRssi() {
+        listDRData.sortWith(
+            compareByDescending<BleDevice> { it.rssi ?: Int.MIN_VALUE }
+                .thenBy { it.deviceAddress ?: "" }
+        )
+    }
+
     /**
      * 停止扫描
      */
     fun stopScan() {
+        if (!BleManager.get().isScanning()) {
+            scanStopMutableStateFlow.value = true
+            return
+        }
         BleManager.get().stopScan()
+        scanStopMutableStateFlow.value = true
     }
 
-    /**
-     * 是否已连接
-     */
     fun isConnected(bleDevice: BleDevice?) = BleManager.get().isConnected(bleDevice)
 
-    /**
-     * 开始连接
-     */
     fun connect(address: String) {
         connect(BleManager.get().buildBleDeviceByDeviceAddress(address))
     }
 
-    /**
-     * 扫描并连接，如果扫描到多个设备，则会连接第一个
-     */
     fun startScanAndConnect(activity: BaseActivity<*, *>) {
         viewModelScope.launch {
             val hasScanPermission = hasScanPermission(activity)
@@ -248,11 +318,9 @@ class MainViewModel(private val application: Application) : BaseViewModel(applic
         }
     }
 
-    /**
-     * 开始连接
-     */
     fun connect(bleDevice: BleDevice?) {
         bleDevice?.let { device ->
+            stopScan()
             BleManager.get().connect(device, false, connectCallback)
         }
     }
@@ -280,33 +348,30 @@ class MainViewModel(private val application: Application) : BaseViewModel(applic
             BleLogger.e("-----${bleDevice.deviceAddress} -> onDisConnecting: $isActiveDisConnected")
         }
         onDisConnected { isActiveDisConnected, bleDevice, _, _ ->
-            Toast.makeText(application, "断开连接(${bleDevice.deviceAddress}，isActiveDisConnected: " +
-                    "$isActiveDisConnected)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                application,
+                "断开连接(${bleDevice.deviceAddress}，isActiveDisConnected: $isActiveDisConnected)",
+                Toast.LENGTH_SHORT
+            ).show()
             BleLogger.e("-----${bleDevice.deviceAddress} -> onDisConnected: $isActiveDisConnected")
             refreshMutableStateFlow.value = RefreshBleDevice(bleDevice, System.currentTimeMillis())
-            //发送断开的通知
             val message = MessageEvent()
             message.data = bleDevice
             EventBus.getDefault().post(message)
         }
         onConnectSuccess { bleDevice, _ ->
+            // 库内在 GATT_SUCCESS 的 onServicesDiscovered 之后才回调此处，已完成服务发现
             Toast.makeText(application, "连接成功(${bleDevice.deviceAddress})", Toast.LENGTH_SHORT).show()
             refreshMutableStateFlow.value = RefreshBleDevice(bleDevice, System.currentTimeMillis())
         }
     }
 
-    /**
-     * 断开连接
-     */
     fun disConnect(bleDevice: BleDevice?) {
         bleDevice?.let { device ->
             BleManager.get().disConnect(device)
         }
     }
 
-    /**
-     * 断开所有连接 释放资源
-     */
     fun close() {
         BleManager.get().closeAll()
     }
