@@ -17,3 +17,4 @@ rootProject.name = "BleCore"
 include ':app'
 include ':ble'
 include ':support'
+include ':spp'

@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:padding="8dp"
+        android:orientation="vertical">
+        <!-- 文件名输入 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="文件名:"
+            android:textSize="12sp" />
+
+        <EditText
+            android:id="@+id/filenameEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="例如：我的笔记（无需后缀）"
+            android:textSize="12sp"
+            android:inputType="text" />
+
+        <!-- 按钮区域 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/saveButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="12sp"
+                android:text="保存文件" />
+
+            <Button
+                android:id="@+id/shareButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="12sp"
+                android:text="分享文件" />
+            <Button
+                android:id="@+id/tapParam"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="12sp"
+                android:text="设置Tap参数" />
+        </LinearLayout>
+        <!-- 状态显示 -->
+        <TextView
+            android:id="@+id/statusTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="#FF0000" />
+    </LinearLayout>
+
+
+    <!-- 状态显示 -->
+<!--    <TextView-->
+<!--        android:id="@+id/statusTextView"-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:layout_marginTop="8dp"-->
+<!--        android:textColor="#FF0000" />-->
+
+    <TextView
+        android:id="@+id/receive_text"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:freezesText="true"
+        android:gravity="bottom"
+        android:scrollbars="vertical"
+        android:padding="8dp"
+        android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
+
+    <View
+        android:layout_width="match_parent"
+        android:background="?android:attr/listDivider"
+        android:layout_height="2dp" />
+
+    <LinearLayout
+        android:layout_margin="4dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <EditText
+            android:id="@+id/send_text"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:inputType="text|textNoSuggestions"
+            android:singleLine="true"
+            />
+
+        <!-- 下拉箭头按钮 -->
+        <ImageButton
+            android:id="@+id/dropdown_arrow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackground"
+            app:srcCompat="@drawable/ic_keyboard_arrow_down_white_24dp"
+            />
+
+        <ImageButton
+            android:id="@+id/send_btn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:srcCompat="@drawable/ic_send_white_24dp"
+            />
+    </LinearLayout>
+
+</LinearLayout>
+

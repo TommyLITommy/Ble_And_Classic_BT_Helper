@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp">
+
+        <!-- Tap Tmax -->
+        <TextView
+            android:id="@+id/txtTapTmax"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="tap_tmax"
+            android:layout_marginTop="16dp"
+            app:layout_constraintHorizontal_weight="1"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <EditText
+            android:id="@+id/editTapTmax"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal"
+            android:layout_marginStart="8dp"
+            app:layout_constraintHorizontal_weight="3"
+            app:layout_constraintBaseline_toBaselineOf="@id/txtTapTmax"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/txtTapTmax" />
+
+        <!-- Tap Tmin -->
+        <TextView
+            android:id="@+id/txtTapTmin"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="tap_tmin"
+            android:layout_marginTop="16dp"
+            app:layout_constraintHorizontal_weight="1"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/txtTapTmax" />
+
+        <EditText
+            android:id="@+id/editTapTmin"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal"
+            android:layout_marginStart="8dp"
+            app:layout_constraintHorizontal_weight="3"
+            app:layout_constraintBaseline_toBaselineOf="@id/txtTapTmin"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/txtTapTmin" />
+
+        <!-- Tap Max -->
+        <TextView
+            android:id="@+id/txtTapMax"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="tap_max"
+            android:layout_marginTop="16dp"
+            app:layout_constraintHorizontal_weight="1"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/txtTapTmin" />
+
+        <EditText
+            android:id="@+id/editTapMax"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal"
+            android:layout_marginStart="8dp"
+            app:layout_constraintHorizontal_weight="3"
+            app:layout_constraintBaseline_toBaselineOf="@id/txtTapMax"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/txtTapMax" />
+
+        <!-- Tap Min -->
+        <TextView
+            android:id="@+id/txtTapMin"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="tap_min"
+            android:layout_marginTop="16dp"
+            app:layout_constraintHorizontal_weight="1"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/txtTapMax" />
+
+        <EditText
+            android:id="@+id/editTapMin"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal"
+            android:layout_marginStart="8dp"
+            app:layout_constraintHorizontal_weight="3"
+            app:layout_constraintBaseline_toBaselineOf="@id/txtTapMin"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/txtTapMin" />
+
+        <!-- Tap Max Peak Tolerance -->
+        <TextView
+            android:id="@+id/txtTapMaxPeakTol"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="tap_max_peak_tol"
+            android:layout_marginTop="16dp"
+            app:layout_constraintHorizontal_weight="1"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/txtTapMin" />
+
+        <EditText
+            android:id="@+id/editTapMaxPeakTol"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal"
+            android:layout_marginStart="8dp"
+            app:layout_constraintHorizontal_weight="3"
+            app:layout_constraintBaseline_toBaselineOf="@id/txtTapMaxPeakTol"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/txtTapMaxPeakTol" />
+
+        <!-- Tap Tavg -->
+        <TextView
+            android:id="@+id/txtTapTavg"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="tap_tavg"
+            android:layout_marginTop="16dp"
+            app:layout_constraintHorizontal_weight="1"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/txtTapMaxPeakTol" />
+
+        <EditText
+            android:id="@+id/editTapTavg"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal"
+            android:layout_marginStart="8dp"
+            app:layout_constraintHorizontal_weight="3"
+            app:layout_constraintBaseline_toBaselineOf="@id/txtTapTavg"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/txtTapTavg" />
+
+        <!-- Tap Min Jerk Threshold -->
+        <TextView
+            android:id="@+id/txtTapMinJerkThreshold"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="tap_min_jerk"
+            android:layout_marginTop="16dp"
+            app:layout_constraintHorizontal_weight="1"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/txtTapTavg" />
+
+        <EditText
+            android:id="@+id/editTapMinJerkThreshold"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal"
+            android:layout_marginStart="8dp"
+            app:layout_constraintHorizontal_weight="3"
+            app:layout_constraintBaseline_toBaselineOf="@id/txtTapMinJerkThreshold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/txtTapMinJerkThreshold" />
+
+        <!-- Tap Smudge Rejection -->
+        <TextView
+            android:id="@+id/txtTapSmudgeRejection"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="tap_smudge"
+            android:layout_marginTop="16dp"
+            app:layout_constraintHorizontal_weight="1"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/txtTapMinJerkThreshold" />
+
+        <EditText
+            android:id="@+id/editTapSmudgeRejection"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal"
+            android:layout_marginStart="8dp"
+            app:layout_constraintHorizontal_weight="3"
+            app:layout_constraintBaseline_toBaselineOf="@id/txtTapSmudgeRejection"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/txtTapSmudgeRejection" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</ScrollView>

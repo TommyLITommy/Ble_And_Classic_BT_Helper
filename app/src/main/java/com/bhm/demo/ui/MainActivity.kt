@@ -21,6 +21,7 @@ import com.bhm.demo.databinding.ActivityMainBinding
 import com.bhm.demo.entity.ScanFilterMode
 import com.bhm.demo.vm.MainViewModel
 import com.bhm.support.sdk.utils.ViewUtil
+import de.kai_morich.simple_bluetooth_terminal.MainActivity as SppMainActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -243,6 +244,11 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>() {
         viewBinding.btnSetting.setOnClickListener {
             if (ViewUtil.isInvalidClick(it)) return@setOnClickListener
             startActivity(Intent(this@MainActivity, OptionSettingActivity::class.java))
+        }
+
+        viewBinding.btnSppTerminal.setOnClickListener {
+            if (ViewUtil.isInvalidClick(it)) return@setOnClickListener
+            startActivity(Intent(this@MainActivity, SppMainActivity::class.java))
         }
 
         viewBinding.btnStart.setOnClickListener {

@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Power Save Mode -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Power Save Mode"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp"/>
+
+        <Spinner
+            android:id="@+id/powerSaveSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+
+        <!-- Power Save Time -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Power Save Time"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp"/>
+
+        <Spinner
+            android:id="@+id/powerSaveTimeSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+
+        <!-- Tap Parameters -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tap Detection Parameters"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"/>
+
+        <!-- Tmax -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tmax (ms)"
+            android:layout_marginTop="8dp"/>
+
+        <SeekBar
+            android:id="@+id/tmaxSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="255"/>
+
+        <TextView
+            android:id="@+id/tmaxValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAlignment="center"/>
+
+        <!-- Tmin -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tmin (ms)"
+            android:layout_marginTop="8dp"/>
+
+        <SeekBar
+            android:id="@+id/tminSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="255"/>
+
+        <TextView
+            android:id="@+id/tminValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAlignment="center"/>
+
+        <!-- Tap Max -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tap Max (g)"
+            android:layout_marginTop="8dp"/>
+
+        <SeekBar
+            android:id="@+id/tapMaxSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="255"/>
+
+        <TextView
+            android:id="@+id/tapMaxValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAlignment="center"/>
+
+        <!-- Tap Min -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tap Min (g)"
+            android:layout_marginTop="8dp"/>
+
+        <SeekBar
+            android:id="@+id/tapMinSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="255"/>
+
+        <TextView
+            android:id="@+id/tapMinValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAlignment="center"/>
+
+        <!-- Max Peak Tolerance -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Max Peak Tolerance"
+            android:layout_marginTop="8dp"/>
+
+        <SeekBar
+            android:id="@+id/maxPeakTolSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="255"/>
+
+        <TextView
+            android:id="@+id/maxPeakTolValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAlignment="center"/>
+
+        <!-- Tavg -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tavg (ms)"
+            android:layout_marginTop="8dp"/>
+
+        <SeekBar
+            android:id="@+id/tavgSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="255"/>
+
+        <TextView
+            android:id="@+id/tavgValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAlignment="center"/>
+
+        <!-- Min Jerk Threshold -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Min Jerk Threshold"
+            android:layout_marginTop="8dp"/>
+
+        <SeekBar
+            android:id="@+id/minJerkSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="255"/>
+
+        <TextView
+            android:id="@+id/minJerkValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAlignment="center"/>
+
+        <!-- Smudge Rejection -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Smudge Rejection"
+            android:layout_marginTop="8dp"/>
+
+        <SeekBar
+            android:id="@+id/smudgeRejectionSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="255"/>
+
+        <TextView
+            android:id="@+id/smudgeRejectionValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAlignment="center"/>
+
+        <!-- Save Button -->
+        <Button
+            android:id="@+id/saveButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Save Configuration"
+            android:layout_marginTop="24dp"/>
+
+    </LinearLayout>
+</ScrollView>

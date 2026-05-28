@@ -51,4 +51,14 @@
     <string name="detail_toggle_log">折叠或收起</string>
     <string name="gatt_expand_service">展开或收起服务</string>
     <string name="detail_back_scan">返回扫描</string>
+    <string name="spp_terminal_title">SPP Terminal</string>
+    <string name="open_spp_terminal">SPP Terminal</string>
+    <string name="transport_select_title">连接模式选择</string>
+    <string name="transport_select_subtitle">同一个 App 支持 BLE 与经典蓝牙 SPP</string>
+    <string name="transport_ble_title">BLE（低功耗蓝牙）</string>
+    <string name="transport_ble_desc">扫描广播、连接 GATT、读写特征值</string>
+    <string name="transport_enter_ble">进入 BLE 控制</string>
+    <string name="transport_spp_title">经典蓝牙 SPP</string>
+    <string name="transport_spp_desc">串口方式连接，进入 Terminal 收发调试</string>
+    <string name="transport_enter_spp">进入 SPP 控制</string>
 </resources>

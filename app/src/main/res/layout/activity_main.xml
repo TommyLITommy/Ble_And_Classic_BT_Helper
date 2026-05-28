@@ -298,6 +298,15 @@
                         android:text="@string/settings"
                         app:strokeColor="@color/primary" />
                 </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSppTerminal"
+                    style="@style/Widget.BleCore.MaterialButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/open_spp_terminal"
+                    app:backgroundTint="@color/accent" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
