@@ -6,4 +6,5 @@
     <dimen name="gatt_char_indent">20dp</dimen>
     <dimen name="gatt_char_group_spacing">6dp</dimen>
     <dimen name="gatt_action_height">40dp</dimen>
+    <dimen name="transport_select_padding">20dp</dimen>
 </resources>

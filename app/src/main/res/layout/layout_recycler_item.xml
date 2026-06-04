@@ -64,24 +64,10 @@
             tools:src="@drawable/adddevice_device_signal_three_icon" />
 
         <TextView
-            android:id="@+id/tvBroadcastPreview"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:ellipsize="end"
-            android:maxLines="2"
-            android:textColor="@color/text_hint"
-            android:textSize="11sp"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/tvAddress"
-            tools:text="09 Complete Local Name: Device" />
-
-        <TextView
             android:id="@+id/btnPreview"
             android:layout_width="wrap_content"
             android:layout_height="32dp"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:background="?attr/selectableItemBackground"
             android:gravity="center"
             android:paddingHorizontal="8dp"
@@ -89,7 +75,7 @@
             android:textColor="@color/primary"
             android:textSize="12sp"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/tvBroadcastPreview" />
+            app:layout_constraintTop_toBottomOf="@id/tvAddress" />
 
         <TextView
             android:id="@+id/btnConnect"

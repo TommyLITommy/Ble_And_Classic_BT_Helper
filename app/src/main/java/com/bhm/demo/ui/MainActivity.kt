@@ -21,7 +21,6 @@ import com.bhm.demo.databinding.ActivityMainBinding
 import com.bhm.demo.entity.ScanFilterMode
 import com.bhm.demo.vm.MainViewModel
 import com.bhm.support.sdk.utils.ViewUtil
-import de.kai_morich.simple_bluetooth_terminal.MainActivity as SppMainActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -59,6 +58,11 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>() {
             insets
         }
         ViewCompat.requestApplyInsets(viewBinding.vTop)
+        viewBinding.toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+        viewBinding.toolbar.setNavigationOnClickListener {
+            if (ViewUtil.isInvalidClick(it)) return@setNavigationOnClickListener
+            finish()
+        }
         initList()
         initSwipeRefresh()
         initFilterUi()
@@ -159,7 +163,6 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>() {
                     if (stopped) getString(R.string.scan_start) else getString(R.string.scanning)
                 viewBinding.btnStart.isEnabled = stopped
                 viewBinding.btnConnect.isEnabled = stopped
-                viewBinding.btnSetting.isEnabled = stopped
                 viewBinding.btnStop.isEnabled = !stopped
                 viewBinding.chipGroupFilter.isEnabled = stopped
                 viewBinding.etNameFilter.isEnabled = stopped
@@ -239,16 +242,6 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>() {
                 },
                 { BleLogger.w("缺少定位权限") }
             )
-        }
-
-        viewBinding.btnSetting.setOnClickListener {
-            if (ViewUtil.isInvalidClick(it)) return@setOnClickListener
-            startActivity(Intent(this@MainActivity, OptionSettingActivity::class.java))
-        }
-
-        viewBinding.btnSppTerminal.setOnClickListener {
-            if (ViewUtil.isInvalidClick(it)) return@setOnClickListener
-            startActivity(Intent(this@MainActivity, SppMainActivity::class.java))
         }
 
         viewBinding.btnStart.setOnClickListener {

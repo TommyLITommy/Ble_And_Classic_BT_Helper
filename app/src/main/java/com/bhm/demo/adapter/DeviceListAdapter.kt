@@ -7,7 +7,6 @@ import com.bhm.ble.BleManager
 import com.bhm.ble.device.BleDevice
 import com.bhm.demo.R
 import com.bhm.demo.databinding.LayoutRecyclerItemBinding
-import com.bhm.demo.utils.BleScanRecordFormatter
 import com.chad.library.adapter.base.BaseQuickAdapter
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
 
@@ -32,7 +31,7 @@ class DeviceListAdapter(data: MutableList<BleDevice>?) :
         val displayName = item.deviceName?.takeIf { it.isNotBlank() }
             ?: context.getString(R.string.device_unnamed)
         holder.binding.tvName.text = displayName
-        holder.binding.tvAddress.text = item.deviceAddress ?: "-"
+        holder.binding.tvAddress.text = "BLE: ${item.deviceAddress ?: "-"}"
         holder.binding.tvRssi.text = context.getString(R.string.rssi_format, item.rssi ?: 0)
 
         val rssi = item.rssi ?: -100
@@ -48,9 +47,6 @@ class DeviceListAdapter(data: MutableList<BleDevice>?) :
             rssi >= -85 -> holder.binding.ivRssi.setImageResource(R.drawable.adddevice_device_signal_two_icon)
             else -> holder.binding.ivRssi.setImageResource(R.drawable.adddevice_device_signal_one_icon)
         }
-
-        holder.binding.tvBroadcastPreview.text =
-            BleScanRecordFormatter.formatParsedSummary(item.scanRecord)
 
         if (BleManager.get().isConnected(item)) {
             holder.binding.btnConnect.text = context.getString(R.string.disconnect)

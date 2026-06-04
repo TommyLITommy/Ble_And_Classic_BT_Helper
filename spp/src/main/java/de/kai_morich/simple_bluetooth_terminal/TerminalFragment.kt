@@ -169,6 +169,7 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
         presetCommands["读取蓝牙耳机名称"] = "3A 5E 20 01 0c 09 00 00 AA 11 22 33 44 55 66 77 88"
         presetCommands["读取NTC温度"] = "3A 5E 20 01 0d 09 00 00 AA 11 22 33 44 55 66 77 88"
         presetCommands["双耳变单耳模式（single)"] = "3A 5E 20 01 12 09 00 00 AA 11 22 33 44 55 66 77 88"
+        presetCommands["读取耳机固件版本号0104"] = "3A 5E 20 01 04 09 00 00 AA 11 22 33 44 55 66 77 88"
         presetCommands["读取耳机固件版本号"] = "3A 5E 20 01 0e 09 00 00 AA 11 22 33 44 55 66 77 88"
         presetCommands["读取耳机电量"] = "3A 5E 20 01 0f 09 00 00 AA 11 22 33 44 55 66 77 88"
         presetCommands["读取耳机MAC地址"] = "3A 5E 20 01 10 09 00 00 AA 11 22 33 44 55 66 77 88"

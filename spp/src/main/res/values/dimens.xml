@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 状态栏占位之外的额外下移，便于点击返回键与菜单 -->
+    <dimen name="spp_toolbar_extra_top">0dp</dimen>
+    <dimen name="spp_toolbar_height">64dp</dimen>
+</resources>
