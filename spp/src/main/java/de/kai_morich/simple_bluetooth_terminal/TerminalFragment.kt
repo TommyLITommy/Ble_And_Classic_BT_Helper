@@ -152,6 +152,8 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
     }
 
     private fun initPresetCommands() {
+        presetCommands["打开WBD数据上报"] = "3A 5E 10 FF 08 09 00 01 41 00 00 00 00 00 00 00 00"
+        presetCommands["关闭WBD数据上报"] = "3A 5E 10 FF 08 09 00 00 41 00 00 00 00 00 00 00 00"
         presetCommands["A5001_FPC_MIC"] = "3A 5E 20 05 0a 09 00 00 06 00 00 00 00 00 00 00 00"
         presetCommands["A5001_板载_MIC"] = "3A 5E 20 05 09 09 00 00 69 00 00 00 00 00 00 00 00"
         presetCommands["A5001_关机"] = "3A 5E 20 02 13 09 00 00 90 00 00 00 00 00 00 00 00"
@@ -571,6 +573,11 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
                 val nvBaseData = ShortArray(2) { buffer.short }
                 spn.append("offset[0]:${offset[0]}, acce:${offset[1]}\n")
                 spn.append("nv_base_data[0]:${nvBaseData[0]}, nv_base_data[1]:${nvBaseData[1]}\n")
+            }
+            frame.group() == 0xFF && subId == 0x08 && payloadLength == SleepUploadDataParser.PAYLOAD_SIZE -> {
+                val parser = SleepUploadDataParser(payload)
+                spn.append(parser.toStringRepresentation()).append("\n\n")
+                parser.printData()
             }
         }
     }

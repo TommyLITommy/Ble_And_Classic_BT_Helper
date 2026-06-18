@@ -70,7 +70,7 @@ object PrivateProtocol {
         normalized[direction.lengthOffset] = (commandLength and 0xFF).toByte()
         normalized[direction.lengthOffset + 1] = ((commandLength shr 8) and 0xFF).toByte()
         val crcIndex = commandLength - 1
-        normalized[crcIndex] = crc8(normalized, 0, crcIndex).toByte()
+        //normalized[crcIndex] = crc8(normalized, 0, crcIndex).toByte()
         return normalized
     }
 

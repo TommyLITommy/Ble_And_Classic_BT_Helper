@@ -40,9 +40,9 @@ class PresetWriteCommandActivity : BaseActivity<BaseViewModel, ActivityPresetWri
     override fun initData() {
         super.initData()
         val controller = WindowCompat.getInsetsController(window, window.decorView)
-        controller.isAppearanceLightStatusBars = true
+        controller.isAppearanceLightStatusBars = false
         controller.isAppearanceLightNavigationBars = true
-        title = getString(R.string.preset_manage_title)
+        viewBinding.toolbar.setNavigationOnClickListener { finish() }
         commands.addAll(PresetWriteCommandStore.loadAll(applicationContext))
         initList()
         refreshEmptyState()

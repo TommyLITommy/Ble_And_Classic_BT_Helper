@@ -17,8 +17,14 @@ import com.bhm.ble.utils.BleUtil
 import com.bhm.demo.entity.CharacteristicNode
 import com.bhm.demo.entity.LogEntity
 import com.bhm.demo.entity.ServiceNode
+import com.bhm.demo.utils.BleReceiveFormatter
 import com.bhm.support.sdk.common.BaseViewModel
 import com.chad.library.adapter.base.entity.node.BaseNode
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.nio.charset.StandardCharsets
@@ -41,6 +47,12 @@ class DetailViewModel(application: Application) : BaseViewModel(application) {
     val listRefreshStateFlow: StateFlow<String> = listRefreshMutableStateFlow
 
     val listLogData = mutableListOf<LogEntity>()
+
+    private val receiveChunkMutableFlow = MutableSharedFlow<String>(extraBufferCapacity = 64)
+
+    val receiveChunkFlow: SharedFlow<String> = receiveChunkMutableFlow.asSharedFlow()
+
+    private val receiveFormatter = BleReceiveFormatter()
 
     /**
      * 根据bleDevice拿到服务特征值数据
@@ -125,6 +137,18 @@ class DetailViewModel(application: Application) : BaseViewModel(application) {
         listLogMutableStateFlow.value = logEntity
     }
 
+    fun appendReceiveData(data: ByteArray, characteristicUuid: String) {
+        val formatted = receiveFormatter.format(data, characteristicUuid)
+        viewModelScope.launch {
+            receiveChunkMutableFlow.emit(formatted)
+            addLogMsg(LogEntity(Level.INFO, "接收到 ${data.size} 字节"))
+        }
+    }
+
+    fun clearReceiveData() {
+        receiveFormatter.reset()
+    }
+
     /**
      * notify
      */
@@ -141,15 +165,7 @@ class DetailViewModel(application: Application) : BaseViewModel(application) {
                 addLogMsg(LogEntity(Level.FINE, "notify成功：${node.characteristicUUID}"))
             }
             onCharacteristicChanged {_, _, data ->
-                //数据处理在IO线程，显示UI要切换到主线程
-                launchInMainThread {
-                    addLogMsg(
-                        LogEntity(
-                            Level.INFO, "Notify接收到${node.characteristicUUID}的数据：" +
-                                    BleUtil.bytesToHex(data)
-                        )
-                    )
-                }
+                appendReceiveData(data, node.characteristicUUID)
             }
         }
     }
@@ -185,15 +201,7 @@ class DetailViewModel(application: Application) : BaseViewModel(application) {
                 addLogMsg(LogEntity(Level.FINE, "indicate成功：${node.characteristicUUID}"))
             }
             onCharacteristicChanged {_, _, data ->
-                //数据处理在IO线程，显示UI要切换到主线程
-                launchInMainThread {
-                    addLogMsg(
-                        LogEntity(
-                            Level.INFO, "Indicate接收到${node.characteristicUUID}的数据：" +
-                                    BleUtil.bytesToHex(data)
-                        )
-                    )
-                }
+                appendReceiveData(data, node.characteristicUUID)
             }
         }
     }
@@ -264,7 +272,7 @@ class DetailViewModel(application: Application) : BaseViewModel(application) {
                 addLogMsg(LogEntity(Level.OFF, "读特征值数据失败：${t.message}"))
             }
             onReadSuccess {_, data ->
-                addLogMsg(LogEntity(Level.FINE, "${node.characteristicUUID} -> 读特征值数据成功：${BleUtil.bytesToHex(data)}"))
+                appendReceiveData(data, node.characteristicUUID)
             }
         }
     }

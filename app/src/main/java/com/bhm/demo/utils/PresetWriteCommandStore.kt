@@ -19,8 +19,8 @@ object PresetWriteCommandStore {
 
     fun loadAll(context: Context): MutableList<PresetWriteCommand> {
         val defaults = buildDefaultCommands()
-        val json = SPUtil.getInstance(context).getString(SP_KEY) ?: return mutableListOf()
-        if (json.isBlank()) {
+        val json = SPUtil.getInstance(context).getString(SP_KEY)
+        if (json.isNullOrBlank()) {
             saveAll(context, defaults)
             return defaults
         }
@@ -40,8 +40,13 @@ object PresetWriteCommandStore {
             return defaults
         }
 
-        // 如果用户已有其他预设，但还没有睡眠模式的两条默认命令，则在 UI 层补齐。
-        // 不强制落盘，避免覆盖用户手动删除的行为。
+        // 内置预设命令随版本更新；已保存的同 id 项同步为最新 payload。
+        val defaultsById = defaults.associateBy { it.id }
+        for (i in loaded.indices) {
+            defaultsById[loaded[i].id]?.let { def ->
+                loaded[i] = loaded[i].copy(name = def.name, payload = def.payload, hexMode = def.hexMode)
+            }
+        }
         val existingIds = loaded.map { it.id }.toHashSet()
         defaults.forEach { def ->
             if (!existingIds.contains(def.id)) {
@@ -58,18 +63,17 @@ object PresetWriteCommandStore {
     }
 
     private fun buildDefaultCommands(): MutableList<PresetWriteCommand> {
-        // 默认睡眠模式预设（HEX 模式，payload 直接使用用户提供的字符串）
         return mutableListOf(
             PresetWriteCommand(
                 id = "default_sleep_open",
-                name = "打开睡眠模式",
-                payload = "3a5e10a29009000141b710519f9d010000",
+                name = "打开sleep上报",
+                payload = "3A 5E 10 FF 08 09 00 01 41 00 00 00 00 00 00 00 00",
                 hexMode = true
             ),
             PresetWriteCommand(
                 id = "default_sleep_close",
-                name = "关闭睡眠模式",
-                payload = "3a5e10a2900900002Cb710519f9d010000",
+                name = "关闭sleep上报",
+                payload = "3A 5E 10 FF 08 09 00 00 41 00 00 00 00 00 00 00 00",
                 hexMode = true
             )
         )

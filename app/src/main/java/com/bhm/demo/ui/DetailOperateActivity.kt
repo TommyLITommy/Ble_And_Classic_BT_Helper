@@ -5,17 +5,23 @@
  */
 package com.bhm.demo.ui
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothGatt
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Environment
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.CompoundButton
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -35,6 +41,7 @@ import com.bhm.demo.entity.CharacteristicNode
 import com.bhm.demo.entity.LogEntity
 import com.bhm.demo.entity.OperateType
 import com.bhm.demo.entity.PresetWriteCommand
+import com.bhm.demo.utils.BleReceiveDataSaver
 import com.bhm.demo.utils.PresetWriteCommandStore
 import com.bhm.demo.vm.DetailViewModel
 import com.bhm.support.sdk.core.AppTheme
@@ -63,6 +70,32 @@ class DetailOperateActivity : BaseActivity<DetailViewModel, ActivityDetailBindin
     private var disConnectWhileClose = false // 关闭页面后是否断开连接
 
     private var connectionPriority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED
+
+    private val receiveText = StringBuilder()
+
+    private val receiveDataSaver = BleReceiveDataSaver(this)
+
+    private var ignoreSaveSwitchCallback = false
+
+    private var lastSavedFilePath: String? = null
+
+    private val manageStorageLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
+                startSaveReceive()
+            } else {
+                setSaveSwitchChecked(false)
+            }
+        }
+
+    private val writeStoragePermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                startSaveReceive()
+            } else {
+                setSaveSwitchChecked(false)
+            }
+        }
 
     private var operateCallback: ((checkBox: CheckBox?,
                                    operateType: OperateType,
@@ -186,6 +219,18 @@ class DetailOperateActivity : BaseActivity<DetailViewModel, ActivityDetailBindin
             }
         }
         lifecycleScope.launch {
+            viewModel.receiveChunkFlow.collect { chunk ->
+                receiveText.append(chunk)
+                viewBinding.tvReceiveData.text = receiveText
+                viewBinding.scrollReceive.post {
+                    viewBinding.scrollReceive.fullScroll(View.FOCUS_DOWN)
+                }
+                if (receiveDataSaver.isRecording) {
+                    receiveDataSaver.append(chunk)
+                }
+            }
+        }
+        lifecycleScope.launch {
             viewModel.listRefreshStateFlow.collect {
                 if (it.isNotEmpty()) {
                     expandAdapter?.notifyDataSetChanged()
@@ -214,6 +259,24 @@ class DetailOperateActivity : BaseActivity<DetailViewModel, ActivityDetailBindin
             }
             loggerListAdapter?.notifyItemRangeRemoved(0, viewModel.listLogData.size)
             viewModel.listLogData.clear()
+        }
+
+        viewBinding.btnClearReceive.setOnClickListener {
+            if (ViewUtil.isInvalidClick(it)) {
+                return@setOnClickListener
+            }
+            receiveText.clear()
+            viewBinding.tvReceiveData.text = ""
+            viewModel.clearReceiveData()
+        }
+
+        viewBinding.switchSaveReceive.setOnCheckedChangeListener { _: CompoundButton, isChecked ->
+            if (ignoreSaveSwitchCallback) return@setOnCheckedChangeListener
+            if (isChecked) {
+                checkPermissionsAndStartSave()
+            } else {
+                stopSaveReceive(showToast = true)
+            }
         }
 
         viewBinding.btnSetMtu.setOnClickListener {
@@ -368,6 +431,94 @@ class DetailOperateActivity : BaseActivity<DetailViewModel, ActivityDetailBindin
         return (value * resources.displayMetrics.density + 0.5f).toInt()
     }
 
+    private fun setSaveSwitchChecked(checked: Boolean) {
+        ignoreSaveSwitchCallback = true
+        viewBinding.switchSaveReceive.isChecked = checked
+        ignoreSaveSwitchCallback = false
+    }
+
+    private fun updateSaveStatusIdle() {
+        viewBinding.tvReceiveSaveStatus.text = getString(R.string.detail_receive_save_idle)
+    }
+
+    private fun updateSaveStatusRecording(path: String) {
+        viewBinding.tvReceiveSaveStatus.text = getString(R.string.detail_receive_save_recording, path)
+    }
+
+    private fun checkPermissionsAndStartSave() {
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+                if (Environment.isExternalStorageManager()) {
+                    startSaveReceive()
+                } else {
+                    requestManageStoragePermission()
+                }
+            }
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
+                if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                    startSaveReceive()
+                } else {
+                    writeStoragePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                }
+            }
+            else -> startSaveReceive()
+        }
+    }
+
+    private fun requestManageStoragePermission() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.detail_receive_save_permission_title)
+            .setMessage(R.string.detail_receive_save_permission_message)
+            .setPositiveButton(R.string.detail_receive_save_go_settings) { _, _ ->
+                try {
+                    manageStorageLauncher.launch(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                } catch (_: Exception) {
+                    manageStorageLauncher.launch(
+                        Intent().setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                    )
+                }
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                setSaveSwitchChecked(false)
+            }
+            .setOnCancelListener {
+                setSaveSwitchChecked(false)
+            }
+            .show()
+    }
+
+    private fun startSaveReceive() {
+        val result = receiveDataSaver.start(getBleDevice().deviceAddress.orEmpty())
+        result.onSuccess { file ->
+            lastSavedFilePath = file.absolutePath
+            updateSaveStatusRecording(file.absolutePath)
+            Toast.makeText(applicationContext, getString(R.string.detail_receive_save_recording, file.absolutePath), Toast.LENGTH_SHORT).show()
+        }.onFailure { error ->
+            setSaveSwitchChecked(false)
+            val message = error.message ?: error.toString()
+            viewBinding.tvReceiveSaveStatus.text = getString(R.string.detail_receive_save_failed, message)
+            Toast.makeText(applicationContext, getString(R.string.detail_receive_save_failed, message), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun stopSaveReceive(showToast: Boolean) {
+        if (!receiveDataSaver.isRecording && lastSavedFilePath == null) {
+            updateSaveStatusIdle()
+            return
+        }
+        val path = receiveDataSaver.currentFilePath ?: lastSavedFilePath
+        receiveDataSaver.stop()
+        if (path != null) {
+            lastSavedFilePath = path
+            viewBinding.tvReceiveSaveStatus.text = getString(R.string.detail_receive_save_stopped, path)
+            if (showToast) {
+                Toast.makeText(applicationContext, getString(R.string.detail_receive_save_stopped, path), Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            updateSaveStatusIdle()
+        }
+    }
+
     /**
      * 接收到断开通知
      */
@@ -384,6 +535,7 @@ class DetailOperateActivity : BaseActivity<DetailViewModel, ActivityDetailBindin
     }
 
     override fun onDestroy() {
+        stopSaveReceive(showToast = false)
         super.onDestroy()
         expandAdapter = null
         operateCallback = null
