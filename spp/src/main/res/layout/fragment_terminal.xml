@@ -10,24 +10,44 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
-        android:padding="8dp"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="2dp"
         android:orientation="vertical">
-        <!-- 文件名输入 -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="文件名:"
-            android:textSize="12sp" />
 
-        <EditText
-            android:id="@+id/filenameEditText"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="例如：我的笔记（无需后缀）"
-            android:textSize="12sp"
-            android:inputType="text" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <!-- 按钮区域 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="文件名:"
+                android:textSize="11sp" />
+
+            <EditText
+                android:id="@+id/filenameEditText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:minHeight="36dp"
+                android:background="@drawable/bg_filename_edittext"
+                android:hint="例如：我的笔记（无需后缀）"
+                android:textSize="11sp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:includeFontPadding="true"
+                android:gravity="center_vertical"
+                android:singleLine="true"
+                android:inputType="text" />
+        </LinearLayout>
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -37,32 +57,56 @@
             <Button
                 android:id="@+id/saveButton"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="36dp"
                 android:layout_weight="1"
-                android:textSize="12sp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/bg_terminal_outline_button"
+                android:backgroundTint="@null"
+                android:minHeight="36dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:textAllCaps="false"
+                android:textSize="11sp"
                 android:text="保存文件" />
 
             <Button
                 android:id="@+id/shareButton"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="36dp"
                 android:layout_weight="1"
-                android:textSize="12sp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/bg_terminal_outline_button"
+                android:backgroundTint="@null"
+                android:minHeight="36dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:textAllCaps="false"
+                android:textSize="11sp"
                 android:text="分享文件" />
+
             <Button
                 android:id="@+id/tapParam"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="36dp"
                 android:layout_weight="1"
-                android:textSize="12sp"
+                android:background="@drawable/bg_terminal_outline_button"
+                android:backgroundTint="@null"
+                android:minHeight="36dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:textAllCaps="false"
+                android:textSize="11sp"
                 android:text="设置Tap参数" />
         </LinearLayout>
-        <!-- 状态显示 -->
+
         <TextView
             android:id="@+id/statusTextView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="2dp"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:textSize="11sp"
             android:textColor="#FF0000" />
     </LinearLayout>
 
@@ -75,16 +119,23 @@
 <!--        android:layout_marginTop="8dp"-->
 <!--        android:textColor="#FF0000" />-->
 
-    <TextView
-        android:id="@+id/receive_text"
+    <ScrollView
+        android:id="@+id/receive_scroll"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:freezesText="true"
-        android:gravity="bottom"
-        android:scrollbars="vertical"
-        android:padding="8dp"
-        android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
+        android:fillViewport="true"
+        android:scrollbars="vertical">
+
+        <TextView
+            android:id="@+id/receive_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:freezesText="true"
+            android:padding="4dp"
+            android:textSize="12sp"
+            android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
+    </ScrollView>
 
     <View
         android:layout_width="match_parent"

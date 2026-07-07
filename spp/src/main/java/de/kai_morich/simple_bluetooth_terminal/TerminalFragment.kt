@@ -18,7 +18,6 @@ import android.provider.Settings
 import android.text.Editable
 import android.text.Spannable
 import android.text.SpannableStringBuilder
-import android.text.method.ScrollingMovementMethod
 import android.text.style.ForegroundColorSpan
 import android.util.Log
 import android.view.LayoutInflater
@@ -30,6 +29,7 @@ import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -58,6 +58,7 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
     private var service: SerialService? = null
 
     private lateinit var receiveText: TextView
+    private lateinit var receiveScroll: ScrollView
     private lateinit var sendText: TextView
     private lateinit var hexWatcher: TextUtil.HexWatcher
 
@@ -162,6 +163,8 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
         presetCommands["A5001_获取固件版本号"] = "3A 5E 20 01 0E 09 00 00 F3 00 00 00 00 00 00 00 00"
         presetCommands["A5001_获取耳机电量"] = "3A 5E 20 01 0F 09 00 00 13 00 00 00 00 00 00 00 00"
         presetCommands["A5001_获取耳机MAC"] = "3A 5E 20 01 10 09 00 00 84 00 00 00 00 00 00 00 00"
+        presetCommands["A5001_打开imu数据上传"] = "3A 5E 20 04 24 09 00 01 28 11 22 33 44 55 66 77 88"
+        presetCommands["A5001_关闭imu数据上传"] = "3A 5E 20 04 24 09 00 00 45 11 22 33 44 55 66 77 88"
         presetCommands["开启IMU_Tap上传"] = "3A 5E 10 FF 07 09 00 01 AA 11 22 33 44 55 66 77 88"
         presetCommands["关闭IMU_Tap上传"] = "3A 5E 10 FF 07 09 00 00 AA 11 22 33 44 55 66 77 88"
         presetCommands["读取SN"] = "3A 5E 20 01 01 09 00 00 AA 11 22 33 44 55 66 77 88"
@@ -325,8 +328,8 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val view = inflater.inflate(R.layout.fragment_terminal, container, false)
         receiveText = view.findViewById(R.id.receive_text)
+        receiveScroll = view.findViewById(R.id.receive_scroll)
         receiveText.setTextColor(resources.getColor(R.color.colorRecieveText))
-        receiveText.movementMethod = ScrollingMovementMethod.getInstance()
         sendText = view.findViewById(R.id.send_text)
         hexWatcher = TextUtil.HexWatcher(sendText).also { it.enable(hexEnabled) }
         sendText.addTextChangedListener(hexWatcher)
@@ -475,6 +478,7 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
                 0, spn.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
             )
             receiveText.append(spn)
+            scrollReceiveToBottom()
             service?.write(data)
         } catch (e: Exception) {
             onSerialIoError(e)
@@ -514,6 +518,7 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
         val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         receiveText.append("---RX---$timestamp---\n")
         receiveText.append(spn)
+        scrollReceiveToBottom()
     }
 
     private fun appendPrivateProtocolFrame(spn: SpannableStringBuilder, frame: PrivateProtocol.Frame) {
@@ -574,8 +579,8 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
                 spn.append("offset[0]:${offset[0]}, acce:${offset[1]}\n")
                 spn.append("nv_base_data[0]:${nvBaseData[0]}, nv_base_data[1]:${nvBaseData[1]}\n")
             }
-            frame.group() == 0xFF && subId == 0x08 && payloadLength == SleepUploadDataParser.PAYLOAD_SIZE -> {
-                val parser = SleepUploadDataParser(payload)
+            frame.group() == 0xFF && subId == 0x08 && payloadLength >= SleepUploadDataParser.PAYLOAD_SIZE -> {
+                val parser = SleepUploadDataParser(payload.copyOf(SleepUploadDataParser.PAYLOAD_SIZE))
                 spn.append(parser.toStringRepresentation()).append("\n\n")
                 parser.printData()
             }
@@ -589,6 +594,11 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
             0, spn.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
         )
         receiveText.append(spn)
+        scrollReceiveToBottom()
+    }
+
+    private fun scrollReceiveToBottom() {
+        receiveScroll.post { receiveScroll.fullScroll(View.FOCUS_DOWN) }
     }
 
     private fun showNotificationSettings() {

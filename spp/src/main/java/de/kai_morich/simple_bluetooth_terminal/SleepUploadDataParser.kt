@@ -87,13 +87,11 @@ class SleepUploadDataParser(data: ByteArray) {
             appendField("sequence", data.sequence)
             appendField("valid", data.valid)
             appendField("timestamp", data.timestamp)
-            appendField("ear_bud_state", data.earBudState)
+            appendField("ear_bud_state", formatEarBudState(data.earBudState))
             appendField("heart_rate", data.heartRate)
             appendField("step_rate", data.stepRate)
             appendField("SpO2", data.spo2)
-            for (i in data.brightLevel.indices) {
-                appendField("bright_level[$i]", data.brightLevel[i])
-            }
+            appendField("bright_level", data.brightLevel.joinToString(";"))
             appendField("total_rr_cnt", data.totalRrCnt)
             appendField("window_rr_cnt", data.windowRrCnt)
             appendField("valid_rr_cnt", data.validRrCnt)
@@ -105,6 +103,9 @@ class SleepUploadDataParser(data: ByteArray) {
             appendField("HRV_Score", String.format(Locale.US, "%.6f", data.hrvScore))
         }
     }
+
+    private fun formatEarBudState(state: Int): String =
+        if (state == 2) "In Ear" else "Out Ear"
 
     private fun StringBuilder.appendField(name: String, value: Any) {
         append(String.format(Locale.US, "%-18s: %s\n", name, value))
