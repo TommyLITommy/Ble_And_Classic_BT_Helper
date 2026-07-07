@@ -1,6 +1,7 @@
 <resources>
     <string name="spp_app_name">Simple Bluetooth Terminal</string>
     <string name="devices">Bluetooth Devices</string>
+    <string name="spp_uuid_label">SPP UUID</string>
 
     <string name="bluetooth_permission_title">Bluetooth permission</string>
     <string name="bluetooth_permission_grant">Bluetooth permission is required by this App. Please grant in next dialog.</string>

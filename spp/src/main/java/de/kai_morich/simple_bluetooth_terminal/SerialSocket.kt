@@ -16,13 +16,9 @@ import java.util.concurrent.Executors
 
 class SerialSocket(
     private val context: Context,
-    private val device: BluetoothDevice
+    private val device: BluetoothDevice,
+    private val sppUuid: UUID,
 ) : Runnable {
-
-    //private val BLUETOOTH_SPP = UUID.fromString("00007033-0000-1000-8000-00805F9B34FB")
-    //private val BLUETOOTH_SPP = UUID.fromString("0CF3A5F9-A5D2-4553-BD80-D6832E7A2001")
-    //private val BLUETOOTH_SPP = UUID.fromString("0CF3A5F9-A5D2-4553-BD80-D6832E7A2003")
-    private val BLUETOOTH_SPP = UUID.fromString("0CF3A5F9-A5D2-4553-BD80-D6832E7A5001")
     private val disconnectBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             listener?.onSerialIoError(IOException("background disconnect"))
@@ -83,7 +79,7 @@ class SerialSocket(
     override fun run() {
         // connect & read
         try {
-            socket = device.createRfcommSocketToServiceRecord(BLUETOOTH_SPP)
+            socket = device.createRfcommSocketToServiceRecord(sppUuid)
             socket?.connect()
             listener?.onSerialConnect()
         } catch (e: Exception) {
@@ -114,7 +110,4 @@ class SerialSocket(
         }
     }
 
-    companion object {
-        private val BLUETOOTH_SPP: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
-    }
 }

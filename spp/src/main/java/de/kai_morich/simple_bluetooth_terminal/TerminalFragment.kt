@@ -440,7 +440,8 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
             val device: BluetoothDevice = bluetoothAdapter.getRemoteDevice(deviceAddress)
             status("connecting...")
             connected = Connected.Pending
-            val socket = SerialSocket(requireActivity().applicationContext, device)
+            val sppUuid = SppPreferences.getServiceUuid(requireContext())
+            val socket = SerialSocket(requireActivity().applicationContext, device, sppUuid)
             service?.connect(socket)
         } catch (e: Exception) {
             onSerialConnectError(e)

@@ -13,8 +13,10 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.ListView
+import android.widget.Spinner
 import android.widget.TextView
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,6 +32,8 @@ class DevicesFragment : ListFragment() {
     private lateinit var requestBluetoothPermissionLauncherForRefresh: ActivityResultLauncher<String>
     private var menu: Menu? = null
     private var permissionMissing = false
+    private var sppUuidSpinner: Spinner? = null
+    private var sppUuidInitializing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -64,6 +68,8 @@ class DevicesFragment : ListFragment() {
         super.onActivityCreated(savedInstanceState)
         setListAdapter(null)
         val header = layoutInflater.inflate(R.layout.device_list_header, null, false)
+        sppUuidSpinner = header.findViewById(R.id.spp_uuid_spinner)
+        setupSppUuidSpinner()
         listView.addHeaderView(header, null, false)
         setEmptyText("initializing...")
         (listView.emptyView as TextView).textSize = 18f
@@ -128,6 +134,35 @@ class DevicesFragment : ListFragment() {
             else -> setEmptyText("<no bluetooth devices found>")
         }
         listAdapter.notifyDataSetChanged()
+    }
+
+    private fun setupSppUuidSpinner() {
+        val spinner = sppUuidSpinner ?: return
+        val activity = activity ?: return
+        val values = resources.getStringArray(R.array.spp_uuid_values)
+        spinner.adapter = ArrayAdapter(
+            activity,
+            R.layout.spp_uuid_spinner_item,
+            values
+        ).apply {
+            setDropDownViewResource(R.layout.spp_uuid_spinner_dropdown_item)
+        }
+
+        val savedUuid = SppPreferences.getServiceUuidString(activity)
+        val savedIndex = values.indexOf(savedUuid).let { if (it >= 0) it else 0 }
+
+        sppUuidInitializing = true
+        spinner.setSelection(savedIndex, false)
+        sppUuidInitializing = false
+
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (sppUuidInitializing) return
+                SppPreferences.setServiceUuid(activity, values[position])
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
     }
 
     override fun onListItemClick(l: ListView, v: View, position: Int, id: Long) {
