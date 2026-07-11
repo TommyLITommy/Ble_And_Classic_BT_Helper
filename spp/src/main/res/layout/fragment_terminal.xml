@@ -28,7 +28,7 @@
                 android:text="文件名:"
                 android:textSize="11sp" />
 
-            <EditText
+            <AutoCompleteTextView
                 android:id="@+id/filenameEditText"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -36,7 +36,7 @@
                 android:layout_marginStart="6dp"
                 android:minHeight="36dp"
                 android:background="@drawable/bg_filename_edittext"
-                android:hint="例如：我的笔记（无需后缀）"
+                android:hint="可选前缀，点选历史或输入新名称"
                 android:textSize="11sp"
                 android:paddingStart="8dp"
                 android:paddingEnd="8dp"
@@ -45,7 +45,25 @@
                 android:includeFontPadding="true"
                 android:gravity="center_vertical"
                 android:singleLine="true"
+                android:completionThreshold="1"
                 android:inputType="text" />
+
+            <Button
+                android:id="@+id/updateFilenameBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/bg_terminal_outline_button"
+                android:backgroundTint="@null"
+                android:minHeight="36dp"
+                android:minWidth="0dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:textAllCaps="false"
+                android:textSize="11sp"
+                android:text="Update" />
         </LinearLayout>
 
         <LinearLayout
@@ -55,26 +73,10 @@
             android:orientation="horizontal">
 
             <Button
-                android:id="@+id/saveButton"
-                android:layout_width="0dp"
-                android:layout_height="36dp"
-                android:layout_weight="1"
-                android:layout_marginEnd="4dp"
-                android:background="@drawable/bg_terminal_outline_button"
-                android:backgroundTint="@null"
-                android:minHeight="36dp"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp"
-                android:textAllCaps="false"
-                android:textSize="11sp"
-                android:text="保存文件" />
-
-            <Button
                 android:id="@+id/shareButton"
                 android:layout_width="0dp"
                 android:layout_height="36dp"
                 android:layout_weight="1"
-                android:layout_marginEnd="4dp"
                 android:background="@drawable/bg_terminal_outline_button"
                 android:backgroundTint="@null"
                 android:minHeight="36dp"
@@ -83,21 +85,26 @@
                 android:textAllCaps="false"
                 android:textSize="11sp"
                 android:text="分享文件" />
-
-            <Button
-                android:id="@+id/tapParam"
-                android:layout_width="0dp"
-                android:layout_height="36dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_terminal_outline_button"
-                android:backgroundTint="@null"
-                android:minHeight="36dp"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp"
-                android:textAllCaps="false"
-                android:textSize="11sp"
-                android:text="设置Tap参数" />
         </LinearLayout>
+
+        <CheckBox
+            android:id="@+id/save_rx_checkbox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:minHeight="32dp"
+            android:paddingStart="2dp"
+            android:text="同步保存接收数据（后台也写文件，单文件≤50MB）"
+            android:textSize="11sp" />
+
+        <CheckBox
+            android:id="@+id/payload_string_checkbox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="32dp"
+            android:paddingStart="2dp"
+            android:text="Payload String打印（提取 MM payload 并以字符串显示）"
+            android:textSize="11sp" />
 
         <TextView
             android:id="@+id/statusTextView"

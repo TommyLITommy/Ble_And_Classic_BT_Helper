@@ -7,15 +7,22 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.media.MediaScannerConnection
 import android.os.Binder
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
+import java.io.File
 import java.io.IOException
+import java.nio.charset.StandardCharsets
+import java.text.SimpleDateFormat
 import java.util.ArrayDeque
+import java.util.Date
+import java.util.Locale
 
 /**
  * create notification and queue serial data while activity is not in the foreground
@@ -68,9 +75,20 @@ class SerialService : Service(), SerialListener {
     private var listener: SerialListener? = null
     private var connected = false
 
+    @Volatile
+    private var receiveLogWriter: ReceiveLogWriter? = null
+
+    @Volatile
+    private var logHexEnabled = true
+
+    @Volatile
+    private var payloadStringEnabled = false
+
+    private val logProtocolDecoder = PrivateProtocolStreamDecoder()
+
     override fun onDestroy() {
-        cancelNotification()
         disconnect()
+        stopRxLogging()
         super.onDestroy()
     }
 
@@ -99,6 +117,110 @@ class SerialService : Service(), SerialListener {
     fun write(data: ByteArray) {
         if (!connected) throw IOException("not connected")
         socket?.write(data)
+    }
+
+    fun setLogHexEnabled(enabled: Boolean) {
+        logHexEnabled = enabled
+        logProtocolDecoder.reset()
+    }
+
+    fun setPayloadStringEnabled(enabled: Boolean) {
+        payloadStringEnabled = enabled
+    }
+
+    fun isRxLogging(): Boolean = receiveLogWriter != null
+
+    fun currentLogFile(): File? = receiveLogWriter?.currentFile
+
+    fun currentLogSize(): Long = receiveLogWriter?.currentSize() ?: 0L
+
+    @Throws(IOException::class)
+    fun startRxLogging(logDir: File, namePrefix: String, hexEnabled: Boolean): File {
+        logHexEnabled = hexEnabled
+        stopRxLogging()
+        logProtocolDecoder.reset()
+        val writer = ReceiveLogWriter(logDir, namePrefix = namePrefix) { file ->
+            scanLogFile(file)
+        }
+        val file = writer.start()
+        receiveLogWriter = writer
+        scanLogFile(file)
+        Log.i(TAG, "startRxLogging: ${file.absolutePath}, hex=$hexEnabled")
+        return file
+    }
+
+    @Throws(IOException::class)
+    fun updateRxLoggingName(namePrefix: String): File {
+        val writer = receiveLogWriter ?: throw IOException("请先勾选同步保存")
+        val file = writer.rotate(namePrefix)
+        scanLogFile(file)
+        Log.i(TAG, "updateRxLoggingName: ${file.absolutePath}")
+        return file
+    }
+
+    fun stopRxLogging(): File? {
+        val writer = receiveLogWriter ?: return null
+        receiveLogWriter = null
+        logProtocolDecoder.reset()
+        val file = writer.stop()
+        scanLogFile(file)
+        Log.i(TAG, "stopRxLogging: ${file?.absolutePath}, size=${file?.length() ?: -1}")
+        return file
+    }
+
+    private fun appendRxLog(data: ByteArray) {
+        val writer = receiveLogWriter ?: return
+        if (!logHexEnabled) {
+            writer.appendBytes(data, asHex = false)
+            return
+        }
+        val frames = logProtocolDecoder.append(data)
+        if (frames.isEmpty()) {
+            if (!logProtocolDecoder.hasPendingData() && !PrivateProtocol.mayContainHeader(data)) {
+                val ts = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+                writer.append("---RX---$ts---\n${TextUtil.toHexString(data)}\n\n")
+            }
+            return
+        }
+        val sb = StringBuilder()
+        val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        for (frame in frames) {
+            sb.append("---RX---").append(timeFmt.format(Date())).append("---\n")
+            TextUtil.toHexString(sb, frame.bytes)
+            sb.append('\n')
+            val payload = frame.payload()
+            if (payloadStringEnabled && payload.isNotEmpty()) {
+                sb.append("Payload String: ")
+                sb.append(String(payload, StandardCharsets.UTF_8))
+                sb.append('\n')
+            }
+            sb.append('\n')
+        }
+        writer.append(sb.toString())
+    }
+
+    private fun scanLogFile(file: File?) {
+        if (file == null) return
+        try {
+            MediaScannerConnection.scanFile(
+                this,
+                arrayOf(file.absolutePath),
+                arrayOf("text/plain")
+            ) { path, uri ->
+                Log.d(TAG, "media scanned path=$path uri=$uri size=${file.length()}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "scanLogFile failed", e)
+        }
+        // Also poke the legacy scanner used by some OEM MTP stacks.
+        try {
+            sendBroadcast(
+                Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE).setData(
+                    android.net.Uri.fromFile(file)
+                )
+            )
+        } catch (_: Exception) {
+        }
     }
 
     fun attach(listener: SerialListener) {
@@ -250,6 +372,8 @@ class SerialService : Service(), SerialListener {
      */
     override fun onSerialRead(data: ByteArray) {
         if (connected) {
+            // File logging runs on the socket thread so it continues while UI is detached.
+            appendRxLog(data)
             synchronized(this) {
                 if (listener != null) {
                     val first: Boolean
@@ -271,7 +395,8 @@ class SerialService : Service(), SerialListener {
                             }
                         }
                     }
-                } else {
+                } else if (receiveLogWriter == null) {
+                    // Only buffer for UI when not file-logging; otherwise RAM would grow unbounded.
                     if (queue2.isEmpty() || queue2.last.type != QueueType.Read) {
                         queue2.add(QueueItem(QueueType.Read))
                     }
@@ -299,5 +424,9 @@ class SerialService : Service(), SerialListener {
                 }
             }
         }
+    }
+
+    companion object {
+        private const val TAG = "SerialService"
     }
 }

@@ -27,7 +27,9 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
@@ -38,7 +40,6 @@ import androidx.fragment.app.Fragment
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -48,6 +49,7 @@ import java.util.ArrayDeque
 import java.util.Date
 import java.util.LinkedHashMap
 import java.util.Locale
+import kotlin.math.min
 
 class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
     TapParameterDialogFragment.OnParameterSetListener {
@@ -71,23 +73,47 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
     private var newline = TextUtil.newline_crlf
     private var pauseRx = false
 
-    private lateinit var filenameEditText: EditText
-    private lateinit var saveButton: Button
+    private lateinit var filenameEditText: AutoCompleteTextView
+    private lateinit var updateFilenameBtn: Button
     private lateinit var shareButton: Button
     private lateinit var statusTextView: TextView
+    private lateinit var saveRxCheckBox: CheckBox
+    private lateinit var payloadStringCheckBox: CheckBox
     private var lastSavedFile: File? = null
+    private var pendingStorageAction: (() -> Unit)? = null
+    private var lastAutoScrollMs = 0L
+    private var suppressSaveRxCallback = false
+    private var payloadStringEnabled = false
+    private var filenameHistoryAdapter: ArrayAdapter<String>? = null
     private var parser = TapParameterParser()
     private val protocolDecoder = PrivateProtocolStreamDecoder()
     private val presetCommands = LinkedHashMap<String, String>()
+    private val logStatusHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val logStatusRunnable = object : Runnable {
+        override fun run() {
+            updateLoggingStatusText()
+            if (service?.isRxLogging() == true) {
+                logStatusHandler.postDelayed(this, 1000L)
+            }
+        }
+    }
     private val manageStorageLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
-                saveFileToDownloads()
+                pendingStorageAction?.invoke()
+            } else {
+                onStoragePermissionDenied()
             }
+            pendingStorageAction = null
         }
     private val writeStoragePermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) saveFileToDownloads()
+            if (granted) {
+                pendingStorageAction?.invoke()
+            } else {
+                onStoragePermissionDenied()
+            }
+            pendingStorageAction = null
         }
     private val postNotificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -113,6 +139,7 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
         super.onStart()
         val act = activity ?: return
         service?.attach(this) ?: act.startService(Intent(act, SerialService::class.java))
+        syncSaveRxCheckBoxFromService()
     }
 
     override fun onStop() {
@@ -144,6 +171,9 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
     override fun onServiceConnected(name: ComponentName, binder: IBinder) {
         service = (binder as SerialService.SerialBinder).getService()
         service?.attach(this)
+        service?.setLogHexEnabled(hexEnabled)
+        service?.setPayloadStringEnabled(payloadStringEnabled)
+        syncSaveRxCheckBoxFromService()
         if (initialStart && isResumed) {
             initialStart = false
             activity?.runOnUiThread { connect() }
@@ -259,57 +289,35 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
             .show()
     }
 
-    private fun saveFileToDownloads() {
-        var filename = filenameEditText.text.toString().trim()
-        if (filename.isEmpty()) {
-            statusTextView.text = "请输入文件名"
-            return
-        }
-        if (!filename.endsWith(".txt")) filename += ".txt"
-
-        try {
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            if (!downloadsDir.exists() && !downloadsDir.mkdirs()) {
-                statusTextView.text = "无法创建Download目录"
-                return
-            }
-            var file = File(downloadsDir, filename)
-            var counter = 1
-            while (file.exists()) {
-                file = File(downloadsDir, filename.replace(".txt", "($counter).txt"))
-                counter++
-            }
-            FileOutputStream(file).use { fos ->
-                fos.write(receiveText.text.toString().toByteArray())
-                activity?.sendBroadcast(Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(file)))
-                lastSavedFile = file
-                val successMsg = "文件保存成功: ${file.absolutePath}"
-                statusTextView.text = successMsg
-                Toast.makeText(activity, successMsg, Toast.LENGTH_LONG).show()
-                receiveText.text = ""
-            }
-        } catch (e: IOException) {
-            val errorMsg = "保存失败: ${e.message}"
-            statusTextView.text = errorMsg
-            Log.e("FileSave", errorMsg, e)
-            Toast.makeText(activity, errorMsg, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun checkPermissionsAndSave() {
+    private fun runWithStoragePermission(action: () -> Unit) {
         when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
-                if (Environment.isExternalStorageManager()) saveFileToDownloads() else requestManageStoragePermission()
+                if (Environment.isExternalStorageManager()) {
+                    action()
+                } else {
+                    pendingStorageAction = action
+                    requestManageStoragePermission()
+                }
             }
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
                 if (activity?.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
-                    saveFileToDownloads()
+                    action()
                 } else {
+                    pendingStorageAction = action
                     writeStoragePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 }
             }
-            else -> saveFileToDownloads()
+            else -> action()
         }
+    }
+
+    private fun onStoragePermissionDenied() {
+        if (::saveRxCheckBox.isInitialized && saveRxCheckBox.isChecked) {
+            suppressSaveRxCallback = true
+            saveRxCheckBox.isChecked = false
+            suppressSaveRxCallback = false
+        }
+        Toast.makeText(activity, "未获得存储权限", Toast.LENGTH_SHORT).show()
     }
 
     private fun requestManageStoragePermission() {
@@ -325,8 +333,163 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
                     )
                 }
             }
-            .setNegativeButton("取消", null)
+            .setNegativeButton("取消") { _, _ -> onStoragePermissionDenied() }
+            .setOnCancelListener { onStoragePermissionDenied() }
             .show()
+    }
+
+    private fun startRxFileLogging() {
+        if (!::saveRxCheckBox.isInitialized || !saveRxCheckBox.isChecked) return
+        val svc = service
+        if (svc == null) {
+            Toast.makeText(activity, "服务未就绪，请稍后重试", Toast.LENGTH_SHORT).show()
+            saveRxCheckBox.isChecked = false
+            return
+        }
+        if (svc.isRxLogging()) {
+            lastSavedFile = svc.currentLogFile()
+            updateLoggingStatusText()
+            startLogStatusUpdates()
+            return
+        }
+        try {
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val logDir = File(downloadsDir, "SPP_RX")
+            val prefix = filenameEditText.text.toString()
+            SppPreferences.rememberFilename(requireContext(), prefix)
+            refreshFilenameHistory()
+            val file = svc.startRxLogging(logDir, prefix, hexEnabled)
+            lastSavedFile = file
+            updateFilenameBtn.isEnabled = true
+            updateLoggingStatusText()
+            startLogStatusUpdates()
+            Toast.makeText(activity, "开始同步保存: ${file.name}", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            if (::saveRxCheckBox.isInitialized) {
+                suppressSaveRxCallback = true
+                saveRxCheckBox.isChecked = false
+                suppressSaveRxCallback = false
+            }
+            updateFilenameBtn.isEnabled = false
+            val errorMsg = "无法开始保存: ${e.message}"
+            statusTextView.text = errorMsg
+            Toast.makeText(activity, errorMsg, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun stopRxFileLogging() {
+        stopLogStatusUpdates()
+        val file = service?.stopRxLogging()
+        updateFilenameBtn.isEnabled = false
+        if (file != null) {
+            lastSavedFile = file
+            activity?.sendBroadcast(Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(file)))
+            statusTextView.text = "已停止: ${file.name} (${formatFileSize(file.length())})"
+        }
+    }
+
+    private fun updateRxLogFilename() {
+        if (service?.isRxLogging() != true) {
+            Toast.makeText(activity, "请先勾选同步保存", Toast.LENGTH_SHORT).show()
+            return
+        }
+        runWithStoragePermission {
+            try {
+                val prefix = filenameEditText.text.toString()
+                SppPreferences.rememberFilename(requireContext(), prefix)
+                refreshFilenameHistory()
+                val file = service?.updateRxLoggingName(prefix)
+                    ?: throw IOException("服务未就绪")
+                lastSavedFile = file
+                updateLoggingStatusText()
+                Toast.makeText(activity, "已切换到新文件: ${file.name}", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(activity, "Update失败: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun updateLoggingStatusText() {
+        if (!::statusTextView.isInitialized) return
+        val file = service?.currentLogFile() ?: lastSavedFile
+        if (service?.isRxLogging() == true && file != null) {
+            val size = service?.currentLogSize() ?: file.length()
+            statusTextView.text = "保存中: ${file.name} (${formatFileSize(size)})"
+        }
+    }
+
+    private fun startLogStatusUpdates() {
+        stopLogStatusUpdates()
+        logStatusHandler.post(logStatusRunnable)
+    }
+
+    private fun stopLogStatusUpdates() {
+        logStatusHandler.removeCallbacks(logStatusRunnable)
+    }
+
+    private fun formatFileSize(bytes: Long): String {
+        return when {
+            bytes < 1024 -> "${bytes}B"
+            bytes < 1024 * 1024 -> String.format(Locale.US, "%.1fKB", bytes / 1024.0)
+            else -> String.format(Locale.US, "%.2fMB", bytes / (1024.0 * 1024.0))
+        }
+    }
+
+    private fun syncSaveRxCheckBoxFromService() {
+        if (!::saveRxCheckBox.isInitialized) return
+        val logging = service?.isRxLogging() == true
+        updateFilenameBtn.isEnabled = logging
+        if (saveRxCheckBox.isChecked == logging) {
+            if (logging) {
+                lastSavedFile = service?.currentLogFile()
+                updateLoggingStatusText()
+                startLogStatusUpdates()
+            }
+            return
+        }
+        suppressSaveRxCallback = true
+        saveRxCheckBox.isChecked = logging
+        suppressSaveRxCallback = false
+        if (logging) {
+            lastSavedFile = service?.currentLogFile()
+            updateLoggingStatusText()
+            startLogStatusUpdates()
+        } else {
+            stopLogStatusUpdates()
+        }
+    }
+
+    override fun onDestroyView() {
+        stopLogStatusUpdates()
+        super.onDestroyView()
+    }
+
+    private fun refreshFilenameHistory() {
+        val ctx = context ?: return
+        val history = SppPreferences.getFilenameHistory(ctx)
+        val adapter = filenameHistoryAdapter
+            ?: ArrayAdapter(ctx, android.R.layout.simple_dropdown_item_1line, ArrayList(history)).also {
+                filenameHistoryAdapter = it
+                filenameEditText.setAdapter(it)
+            }
+        adapter.clear()
+        adapter.addAll(history)
+        adapter.notifyDataSetChanged()
+    }
+
+    private fun setupFilenameInput() {
+        val ctx = requireContext()
+        filenameEditText.threshold = 0
+        val last = SppPreferences.getLastFilename(ctx)
+        if (last.isNotEmpty() && filenameEditText.text.isNullOrEmpty()) {
+            filenameEditText.setText(last)
+            filenameEditText.setSelection(filenameEditText.text.length)
+        }
+        refreshFilenameHistory()
+        filenameEditText.setOnClickListener { filenameEditText.showDropDown() }
+        filenameEditText.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) filenameEditText.showDropDown()
+        }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -347,18 +510,33 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
         }
         editBytesBtn.setOnClickListener { showHexByteEditor() }
         view.findViewById<View>(R.id.dropdown_arrow).setOnClickListener { if (hexEnabled) showPresetDialog() }
-        view.findViewById<View>(R.id.tapParam).setOnClickListener {
-            if (hexEnabled) TapParameterDialogFragment.newInstance(parser)
-                .show(childFragmentManager, "TapParametersDialog")
-        }
 
         filenameEditText = view.findViewById(R.id.filenameEditText)
-        saveButton = view.findViewById(R.id.saveButton)
+        updateFilenameBtn = view.findViewById(R.id.updateFilenameBtn)
         shareButton = view.findViewById(R.id.shareButton)
         statusTextView = view.findViewById(R.id.statusTextView)
-        saveButton.setOnClickListener { checkPermissionsAndSave() }
+        saveRxCheckBox = view.findViewById(R.id.save_rx_checkbox)
+        payloadStringCheckBox = view.findViewById(R.id.payload_string_checkbox)
+        setupFilenameInput()
+        updateFilenameBtn.isEnabled = false
+        updateFilenameBtn.setOnClickListener { updateRxLogFilename() }
         shareButton.setOnClickListener { showAppChooser() }
+        payloadStringCheckBox.isChecked = payloadStringEnabled
+        payloadStringCheckBox.setOnCheckedChangeListener { _, isChecked ->
+            payloadStringEnabled = isChecked
+            service?.setPayloadStringEnabled(isChecked)
+        }
+        saveRxCheckBox.setOnCheckedChangeListener { _, isChecked ->
+            if (suppressSaveRxCallback) return@setOnCheckedChangeListener
+            if (isChecked) {
+                runWithStoragePermission { startRxFileLogging() }
+            } else {
+                pendingStorageAction = null
+                stopRxFileLogging()
+            }
+        }
         view.findViewById<View>(R.id.send_btn).setOnClickListener { send(sendText.text.toString()) }
+        syncSaveRxCheckBoxFromService()
         return view
     }
 
@@ -461,9 +639,9 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
     }
 
     private fun showAppChooser() {
-        val file = lastSavedFile
+        val file = service?.currentLogFile() ?: lastSavedFile
         if (file == null || !file.exists()) {
-            Toast.makeText(activity, "请先保存有效的文件", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, "请先勾选同步保存并产生日志文件", Toast.LENGTH_SHORT).show()
             return
         }
         try {
@@ -500,7 +678,7 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.clear -> {
-                receiveText.text = ""
+                clearReceiveDisplay()
                 true
             }
             R.id.newline -> {
@@ -520,6 +698,7 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
                 protocolDecoder.reset()
                 sendText.setText("")
                 hexWatcher.enable(hexEnabled)
+                service?.setLogHexEnabled(hexEnabled)
                 updateSendInputUi()
                 item.isChecked = hexEnabled
                 true
@@ -588,6 +767,7 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
                 0, spn.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
             )
             receiveText.append(spn)
+            trimReceiveDisplayIfNeeded()
             scrollReceiveToBottom()
             service?.write(data)
         } catch (e: Exception) {
@@ -597,15 +777,19 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
 
     private fun receive(datas: ArrayDeque<ByteArray>) {
         val spn = SpannableStringBuilder()
+        val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
         for (data in datas) {
             if (hexEnabled) {
-                if (pauseRx) return
-                val waitingForPrivateFrame = protocolDecoder.hasPendingData()
+                if (pauseRx) continue
                 val frames = protocolDecoder.append(data)
-                if (frames.isEmpty() && !waitingForPrivateFrame && !PrivateProtocol.mayContainHeader(data)) {
-                    spn.append(TextUtil.toHexString(data)).append("\n")
+                if (frames.isEmpty()) {
+                    if (!protocolDecoder.hasPendingData() && !PrivateProtocol.mayContainHeader(data)) {
+                        spn.append("---RX---").append(timeFmt.format(Date())).append("---\n")
+                        spn.append(TextUtil.toHexString(data)).append("\n\n")
+                    }
+                } else {
+                    frames.forEach { appendPrivateProtocolFrame(spn, it, timeFmt) }
                 }
-                frames.forEach { appendPrivateProtocolFrame(spn, it) }
             } else {
                 var msg = String(data)
                 if (newline == TextUtil.newline_crlf && msg.isNotEmpty()) {
@@ -624,56 +808,108 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
             }
         }
         if (spn.isEmpty()) return
-        spn.append("\n")
-        val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-        receiveText.append("---RX---$timestamp---\n")
-        receiveText.append(spn)
-        scrollReceiveToBottom()
+        appendReceiveDisplay(spn)
+        scrollReceiveToBottom(throttled = true)
     }
 
-    private fun appendPrivateProtocolFrame(spn: SpannableStringBuilder, frame: PrivateProtocol.Frame) {
+    private fun appendReceiveDisplay(text: CharSequence) {
+        receiveText.append(text)
+        trimReceiveDisplayIfNeeded()
+    }
+
+    private fun clearReceiveDisplay() {
+        receiveText.text = ""
+    }
+
+    private fun trimReceiveDisplayIfNeeded() {
+        val editable = receiveText.editableText ?: return
+        val overflow = editable.length - MAX_RECEIVE_DISPLAY_CHARS
+        if (overflow <= 0) return
+        val deleteCount = min(editable.length, overflow + MAX_RECEIVE_DISPLAY_CHARS / 5)
+        editable.delete(0, deleteCount)
+    }
+
+    private fun appendPayloadAsString(spn: SpannableStringBuilder, payload: ByteArray) {
+        val start = spn.length
+        spn.append("Payload String: ")
+        spn.append(String(payload, StandardCharsets.UTF_8))
+        spn.append('\n')
+        spn.setSpan(
+            ForegroundColorSpan(resources.getColor(R.color.colorStatusText)),
+            start,
+            spn.length,
+            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+    }
+
+    private fun appendPrivateProtocolFrame(
+        spn: SpannableStringBuilder,
+        frame: PrivateProtocol.Frame,
+        timeFmt: SimpleDateFormat,
+    ) {
         val data = frame.bytes
         val payload = frame.payload()
         val payloadLength = payload.size
         val subId = frame.subId()
+        val wantPayloadString = payloadStringEnabled ||
+            (::payloadStringCheckBox.isInitialized && payloadStringCheckBox.isChecked)
+
         Log.d(
             "MyTag",
             String.format(
                 Locale.US,
-                "receive frame, rx_len:%d, cmd_len:%d, cmd:0x%02X, group:0x%02X, subId:0x%02X, payload_len:%d, res:0x%02X",
-                data.size, frame.commandLength, frame.cmd(), frame.group(), subId, payloadLength, frame.responseCode()
+                "receive frame, rx_len:%d, cmd_len:%d, cmd:0x%02X, group:0x%02X, subId:0x%02X, payload_len:%d, res:0x%02X, payloadString=%s",
+                data.size, frame.commandLength, frame.cmd(), frame.group(), subId, payloadLength,
+                frame.responseCode(), wantPayloadString
             )
         )
-        spn.append(TextUtil.toHexString(data)).append("\n")
+
+        // Timestamp + one complete packet per block, blank line as separator.
+        spn.append("---RX---").append(timeFmt.format(Date())).append("---\n")
+        spn.append(TextUtil.toHexString(data)).append('\n')
+
+        if (wantPayloadString && payloadLength > 0) {
+            appendPayloadAsString(spn, payload)
+            spn.append('\n')
+            return
+        }
+
         when {
             subId == 0x24 && (payloadLength == 21 || payloadLength == 42) -> {
-                val parser = IMUUploadDataParser(payload)
-                spn.append(parser.toStringRepresentation()).append("\n\n")
-                parser.printIMUData()
+                val imuParser = IMUUploadDataParser(payload)
+                spn.append(imuParser.toStringRepresentation()).append('\n')
+                imuParser.printIMUData()
             }
             subId == 0x22 -> {
                 if (payloadLength == 48 || payloadLength == 96) {
-                    val parser = TouchUploadDataParser(payload)
-                    spn.append(parser.toStringRepresentation()).append("\n\n")
-                    parser.printData()
+                    val touchParser = TouchUploadDataParser(payload)
+                    spn.append(touchParser.toStringRepresentation()).append('\n')
+                    touchParser.printData()
                 } else if (payloadLength >= 2) {
                     if ((payload[0].toInt() == 0x69 && payload[1].toInt() == 0x64) ||
                         (payload[0].toInt() == 0x48 && payload[1].toInt() == 0x58)
                     ) {
-                        spn.append(String(payload, StandardCharsets.UTF_8)).append("\n\n")
+                        spn.append(String(payload, StandardCharsets.UTF_8)).append('\n')
                     }
                 }
             }
-            subId == 0x21 && payloadLength == 1 -> spn.append(WearTest.showWearStatus(payload[0]))
-            subId == 0x23 && payloadLength == 1 -> spn.append(ImuKeyPressTest.showImuKeyPress(payload[0]))
+            subId == 0x21 && payloadLength == 1 -> {
+                spn.append(WearTest.showWearStatus(payload[0]))
+                if (spn.isNotEmpty() && spn[spn.length - 1] != '\n') spn.append('\n')
+            }
+            subId == 0x23 && payloadLength == 1 -> {
+                spn.append(ImuKeyPressTest.showImuKeyPress(payload[0]))
+                if (spn.isNotEmpty() && spn[spn.length - 1] != '\n') spn.append('\n')
+            }
             subId == 0x06 && payloadLength == 10 -> {
                 parser = TapParameterParser(payload)
                 spn.append(parser.toString())
+                if (spn.isNotEmpty() && spn[spn.length - 1] != '\n') spn.append('\n')
             }
             subId == 0x85 && payloadLength >= 10 -> {
                 val sequence = (payload[6].toInt() and 0xFF) + ((payload[7].toInt() and 0xFF) shl 8)
                 val length = (payload[8].toInt() and 0xFF) + ((payload[9].toInt() and 0xFF) shl 8)
-                spn.append("seq:$sequence, audio data length:$length")
+                spn.append("seq:$sequence, audio data length:$length\n")
             }
             (subId == 0x28 || subId == 0x2B) && payloadLength >= 12 -> {
                 val buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
@@ -689,12 +925,8 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
                 spn.append("offset[0]:${offset[0]}, acce:${offset[1]}\n")
                 spn.append("nv_base_data[0]:${nvBaseData[0]}, nv_base_data[1]:${nvBaseData[1]}\n")
             }
-            frame.group() == 0xFF && subId == 0x08 && payloadLength >= SleepUploadDataParser.PAYLOAD_SIZE -> {
-                val parser = SleepUploadDataParser(payload.copyOf(SleepUploadDataParser.PAYLOAD_SIZE))
-                spn.append(parser.toStringRepresentation()).append("\n\n")
-                parser.printData()
-            }
         }
+        spn.append('\n')
     }
 
     private fun status(str: String) {
@@ -703,11 +935,14 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
             ForegroundColorSpan(resources.getColor(R.color.colorStatusText)),
             0, spn.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
         )
-        receiveText.append(spn)
+        appendReceiveDisplay(spn)
         scrollReceiveToBottom()
     }
 
-    private fun scrollReceiveToBottom() {
+    private fun scrollReceiveToBottom(throttled: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (throttled && now - lastAutoScrollMs < AUTO_SCROLL_MIN_INTERVAL_MS) return
+        lastAutoScrollMs = now
         receiveScroll.post { receiveScroll.fullScroll(View.FOCUS_DOWN) }
     }
 
@@ -742,5 +977,8 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
     }
 
     companion object {
+        /** Soft cap for on-screen RX buffer; older text is discarded. */
+        private const val MAX_RECEIVE_DISPLAY_CHARS = 200_000
+        private const val AUTO_SCROLL_MIN_INTERVAL_MS = 200L
     }
 }
