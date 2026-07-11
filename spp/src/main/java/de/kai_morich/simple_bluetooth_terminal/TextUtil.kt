@@ -108,9 +108,14 @@ object TextUtil {
 
         fun enable(enable: Boolean) {
             if (enable) {
-                view.inputType = InputType.TYPE_CLASS_TEXT + InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                view.inputType = InputType.TYPE_CLASS_TEXT or
+                    InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                    InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or
+                    InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
             } else {
-                view.inputType = InputType.TYPE_CLASS_TEXT + InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                view.inputType = InputType.TYPE_CLASS_TEXT or
+                    InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                    InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             }
             enabled = enable
         }
@@ -121,13 +126,22 @@ object TextUtil {
         override fun afterTextChanged(s: Editable) {
             if (!enabled || self) return
 
+            val cursor = view.selectionStart.coerceAtLeast(0)
+            var digitsBeforeCursor = 0
+            val limit = cursor.coerceAtMost(s.length)
+            for (i in 0 until limit) {
+                val c = s[i]
+                if (c in '0'..'9' || c in 'A'..'F' || c in 'a'..'f') digitsBeforeCursor++
+            }
+
             sb.clear()
             var i = 0
             while (i < s.length) {
                 val c = s[i]
-                if (c in '0'..'9') sb.append(c)
-                if (c in 'A'..'F') sb.append(c)
-                if (c in 'a'..'f') sb.append((c.code + 'A'.code - 'a'.code).toChar())
+                when {
+                    c in '0'..'9' || c in 'A'..'F' -> sb.append(c)
+                    c in 'a'..'f' -> sb.append((c.code + 'A'.code - 'a'.code).toChar())
+                }
                 i++
             }
             i = 2
@@ -139,6 +153,11 @@ object TextUtil {
             if (s2 != s.toString()) {
                 self = true
                 s.replace(0, s.length, s2)
+                // Keep caret on the same hex digit so mid-string edits stay usable.
+                val newPos = (digitsBeforeCursor + digitsBeforeCursor / 2).coerceIn(0, s2.length)
+                if (view is android.widget.EditText) {
+                    view.setSelection(newPos)
+                }
                 self = false
             }
         }

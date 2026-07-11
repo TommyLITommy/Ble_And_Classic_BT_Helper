@@ -59,7 +59,9 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
 
     private lateinit var receiveText: TextView
     private lateinit var receiveScroll: ScrollView
-    private lateinit var sendText: TextView
+    private lateinit var sendText: EditText
+    private lateinit var clearSendBtn: View
+    private lateinit var editBytesBtn: View
     private lateinit var hexWatcher: TextUtil.HexWatcher
 
     private var connected = Connected.False
@@ -153,6 +155,8 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
     }
 
     private fun initPresetCommands() {
+        presetCommands["打开WBD原始数据上报"] = "3A 5E 20 01 01 08 00 3E 00 00 00 00 00 00 00 00"
+        presetCommands["关闭WBD原始数据上报"] = "3A 5E 20 01 02 08 00 A1 00 00 00 00 00 00 00 00"
         presetCommands["打开WBD数据上报"] = "3A 5E 10 FF 08 09 00 01 41 00 00 00 00 00 00 00 00"
         presetCommands["关闭WBD数据上报"] = "3A 5E 10 FF 08 09 00 00 41 00 00 00 00 00 00 00 00"
         presetCommands["A5001_FPC_MIC"] = "3A 5E 20 05 0a 09 00 00 06 00 00 00 00 00 00 00 00"
@@ -229,9 +233,9 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
             hexString.setLength(0)
             TextUtil.toHexString(hexString, normalized)
             Log.d("MyTag", "Set Tap parameter:$hexString")
-            sendText.text = hexString.toString().trim()
+            sendText.setText(hexString.toString().trim())
         } catch (_: IOException) {
-            sendText.text = "Error converting parameters to binary"
+            sendText.setText("Error converting parameters to binary")
         }
     }
 
@@ -247,7 +251,7 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
                 selectedCommand = selectedCommand?.trim()
                     ?.replace("\\s*0D\\s*0A$".toRegex(), "")
                     ?.replace("\\s*0d\\s*0a$".toRegex(), "")
-                sendText.text = selectedCommand
+                sendText.setText(selectedCommand)
                 Toast.makeText(activity, "已选择命令：$selectedName", Toast.LENGTH_SHORT).show()
                 dialog.dismiss()
             }
@@ -331,10 +335,17 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
         receiveScroll = view.findViewById(R.id.receive_scroll)
         receiveText.setTextColor(resources.getColor(R.color.colorRecieveText))
         sendText = view.findViewById(R.id.send_text)
+        clearSendBtn = view.findViewById(R.id.clear_send_btn)
+        editBytesBtn = view.findViewById(R.id.edit_bytes_btn)
         hexWatcher = TextUtil.HexWatcher(sendText).also { it.enable(hexEnabled) }
         sendText.addTextChangedListener(hexWatcher)
-        sendText.hint = if (hexEnabled) "HEX mode" else ""
+        updateSendInputUi()
 
+        clearSendBtn.setOnClickListener {
+            sendText.setText("")
+            sendText.requestFocus()
+        }
+        editBytesBtn.setOnClickListener { showHexByteEditor() }
         view.findViewById<View>(R.id.dropdown_arrow).setOnClickListener { if (hexEnabled) showPresetDialog() }
         view.findViewById<View>(R.id.tapParam).setOnClickListener {
             if (hexEnabled) TapParameterDialogFragment.newInstance(parser)
@@ -349,6 +360,104 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
         shareButton.setOnClickListener { showAppChooser() }
         view.findViewById<View>(R.id.send_btn).setOnClickListener { send(sendText.text.toString()) }
         return view
+    }
+
+    private fun updateSendInputUi() {
+        sendText.hint = if (hexEnabled) "HEX，可点铅笔按字节改" else "文本"
+        editBytesBtn.visibility = if (hexEnabled) View.VISIBLE else View.GONE
+        sendText.typeface = if (hexEnabled) {
+            android.graphics.Typeface.MONOSPACE
+        } else {
+            android.graphics.Typeface.DEFAULT
+        }
+    }
+
+    private fun showHexByteEditor() {
+        if (!hexEnabled) return
+        val bytes = TextUtil.fromHexString(sendText.text).copyOf()
+        if (bytes.isEmpty()) {
+            Toast.makeText(activity, "请先输入十六进制数据", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val ctx = requireContext()
+        val density = resources.displayMetrics.density
+        val pad = (12 * density).toInt()
+        val scroll = ScrollView(ctx)
+        val grid = android.widget.GridLayout(ctx).apply {
+            columnCount = 4
+            setPadding(pad, pad, pad, pad / 2)
+        }
+        scroll.addView(grid)
+
+        fun refreshGrid() {
+            grid.removeAllViews()
+            bytes.forEachIndexed { index, value ->
+                val cell = Button(ctx).apply {
+                    minHeight = 0
+                    minimumHeight = 0
+                    minWidth = 0
+                    minimumWidth = 0
+                    setPadding(pad / 2, pad, pad / 2, pad)
+                    textSize = 11f
+                    typeface = android.graphics.Typeface.MONOSPACE
+                    text = String.format(Locale.US, "[%d]\n%02X", index, value)
+                    setOnClickListener {
+                        val input = EditText(ctx).apply {
+                            setText(String.format(Locale.US, "%02X", value))
+                            setSelectAllOnFocus(true)
+                            selectAll()
+                            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                                android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or
+                                android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                            hint = "00-FF"
+                            filters = arrayOf(android.text.InputFilter.LengthFilter(2))
+                            setPadding(pad * 2, pad, pad * 2, pad)
+                        }
+                        val editDialog = AlertDialog.Builder(ctx)
+                            .setTitle("修改第 $index 字节")
+                            .setView(input)
+                            .setPositiveButton("确定", null)
+                            .setNegativeButton("取消", null)
+                            .create()
+                        editDialog.setOnShowListener {
+                            editDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                                val raw = input.text.toString().trim()
+                                if (raw.isEmpty() || raw.any {
+                                        it !in '0'..'9' && it !in 'A'..'F' && it !in 'a'..'f'
+                                    }) {
+                                    Toast.makeText(ctx, "请输入 1~2 位十六进制", Toast.LENGTH_SHORT).show()
+                                    return@setOnClickListener
+                                }
+                                bytes[index] = TextUtil.fromHexString(raw).firstOrNull() ?: 0
+                                refreshGrid()
+                                editDialog.dismiss()
+                            }
+                            input.requestFocus()
+                        }
+                        editDialog.show()
+                    }
+                }
+                val lp = android.widget.GridLayout.LayoutParams().apply {
+                    width = 0
+                    height = ViewGroup.LayoutParams.WRAP_CONTENT
+                    columnSpec = android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f)
+                    setMargins(4, 4, 4, 4)
+                }
+                grid.addView(cell, lp)
+            }
+        }
+        refreshGrid()
+
+        AlertDialog.Builder(ctx)
+            .setTitle("按字节编辑（点选修改）")
+            .setView(scroll)
+            .setPositiveButton("应用") { _, _ ->
+                sendText.setText(TextUtil.toHexString(bytes))
+                sendText.setSelection(sendText.text.length)
+            }
+            .setNegativeButton("取消", null)
+            .show()
     }
 
     private fun showAppChooser() {
@@ -409,9 +518,9 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
             R.id.hex -> {
                 hexEnabled = !hexEnabled
                 protocolDecoder.reset()
-                sendText.text = ""
+                sendText.setText("")
                 hexWatcher.enable(hexEnabled)
-                sendText.hint = if (hexEnabled) "HEX mode" else ""
+                updateSendInputUi()
                 item.isChecked = hexEnabled
                 true
             }

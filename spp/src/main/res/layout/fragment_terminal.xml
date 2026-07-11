@@ -146,32 +146,53 @@
         android:layout_margin="4dp"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="bottom"
         android:orientation="horizontal">
 
         <EditText
             android:id="@+id/send_text"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:inputType="text|textNoSuggestions"
-            android:singleLine="true"
-            />
+            android:fontFamily="monospace"
+            android:gravity="top|start"
+            android:hint="HEX / 文本"
+            android:inputType="textMultiLine|textNoSuggestions"
+            android:maxLines="4"
+            android:minHeight="40dp"
+            android:textSize="13sp" />
 
-        <!-- 下拉箭头按钮 -->
+        <ImageButton
+            android:id="@+id/clear_send_btn"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="清空输入"
+            app:srcCompat="@drawable/ic_clear_input_white_24dp" />
+
+        <ImageButton
+            android:id="@+id/edit_bytes_btn"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="按字节编辑"
+            app:srcCompat="@drawable/ic_edit_bytes_white_24dp" />
+
         <ImageButton
             android:id="@+id/dropdown_arrow"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="?attr/selectableItemBackground"
-            app:srcCompat="@drawable/ic_keyboard_arrow_down_white_24dp"
-            />
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="预设命令"
+            app:srcCompat="@drawable/ic_keyboard_arrow_down_white_24dp" />
 
         <ImageButton
             android:id="@+id/send_btn"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:srcCompat="@drawable/ic_send_white_24dp"
-            />
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="发送"
+            app:srcCompat="@drawable/ic_send_white_24dp" />
     </LinearLayout>
 
 </LinearLayout>

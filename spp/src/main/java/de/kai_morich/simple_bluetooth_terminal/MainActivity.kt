@@ -53,7 +53,9 @@ class MainActivity : AppCompatActivity(), FragmentManager.OnBackStackChangedList
             v.layoutParams = v.layoutParams.apply { height = topInset }
             v.requestLayout()
             val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
-            fragmentHost.setPadding(0, 0, 0, navBars.bottom)
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            // Edge-to-edge disables classic adjustResize for IME; pad for keyboard so send_text stays visible.
+            fragmentHost.setPadding(0, 0, 0, maxOf(ime.bottom, navBars.bottom))
             insets
         }
         ViewCompat.requestApplyInsets(vTop)
