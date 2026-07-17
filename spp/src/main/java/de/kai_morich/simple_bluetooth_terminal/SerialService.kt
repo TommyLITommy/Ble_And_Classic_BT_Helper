@@ -168,7 +168,20 @@ class SerialService : Service(), SerialListener {
         return file
     }
 
-    private fun appendRxLog(data: ByteArray) {
+    /**
+     * Prefer writing the exact UI display text (from TerminalFragment) so file content
+     * matches what the user sees. Used whenever the UI is attached and rendering RX/TX.
+     */
+    fun appendRxLogText(text: CharSequence) {
+        if (text.isEmpty()) return
+        receiveLogWriter?.append(text.toString())
+    }
+
+    /**
+     * Fallback when UI is detached (e.g. left Terminal) but sync-save is still on.
+     * Not a full mirror of every TerminalFragment branch; UI-attached path is authoritative.
+     */
+    private fun appendRxLogFallback(data: ByteArray) {
         val writer = receiveLogWriter ?: return
         if (!logHexEnabled) {
             writer.appendBytes(data, asHex = false)
@@ -193,6 +206,13 @@ class SerialService : Service(), SerialListener {
                 sb.append("Payload String: ")
                 sb.append(String(payload, StandardCharsets.UTF_8))
                 sb.append('\n')
+            }
+            if (frame.group() == 0xFF && frame.subId() == 0x08 &&
+                payload.size == SleepUploadDataParser.PAYLOAD_SIZE
+            ) {
+                val parser = SleepUploadDataParser(payload)
+                sb.append(parser.toStringRepresentation()).append('\n')
+                SleepRecordHistoryStore.addFromParser(parser)
             }
             sb.append('\n')
         }
@@ -372,10 +392,9 @@ class SerialService : Service(), SerialListener {
      */
     override fun onSerialRead(data: ByteArray) {
         if (connected) {
-            // File logging runs on the socket thread so it continues while UI is detached.
-            appendRxLog(data)
             synchronized(this) {
                 if (listener != null) {
+                    // UI attached: TerminalFragment writes the exact display text to the log file.
                     val first: Boolean
                     synchronized(lastRead) {
                         first = lastRead.datas?.isEmpty() == true // (1)
@@ -391,16 +410,25 @@ class SerialService : Service(), SerialListener {
                             if (listener != null) {
                                 listener?.onSerialRead(datas)
                             } else {
+                                // UI vanished before consume; fall back to service-side log.
+                                for (chunk in datas) {
+                                    appendRxLogFallback(chunk)
+                                }
                                 queue1.add(QueueItem(QueueType.Read, datas))
                             }
                         }
                     }
-                } else if (receiveLogWriter == null) {
-                    // Only buffer for UI when not file-logging; otherwise RAM would grow unbounded.
-                    if (queue2.isEmpty() || queue2.last.type != QueueType.Read) {
-                        queue2.add(QueueItem(QueueType.Read))
+                } else {
+                    // UI detached: keep writing while sync-save is on (best-effort format).
+                    if (receiveLogWriter != null) {
+                        appendRxLogFallback(data)
+                    } else {
+                        // Only buffer for UI when not file-logging; otherwise RAM would grow unbounded.
+                        if (queue2.isEmpty() || queue2.last.type != QueueType.Read) {
+                            queue2.add(QueueItem(QueueType.Read))
+                        }
+                        queue2.last.add(data)
                     }
-                    queue2.last.add(data)
                 }
             }
         }

@@ -770,8 +770,7 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
                 ForegroundColorSpan(resources.getColor(R.color.colorSendText)),
                 0, spn.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
             )
-            receiveText.append(spn)
-            trimReceiveDisplayIfNeeded()
+            appendReceiveDisplay(spn)
             scrollReceiveToBottom()
             service?.write(data)
         } catch (e: Exception) {
@@ -817,8 +816,13 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
     }
 
     private fun appendReceiveDisplay(text: CharSequence) {
+        if (text.isEmpty()) return
         receiveText.append(text)
         trimReceiveDisplayIfNeeded()
+        // Keep file content identical to on-screen log while sync-save is enabled.
+        if (service?.isRxLogging() == true) {
+            service?.appendRxLogText(text)
+        }
     }
 
     private fun clearReceiveDisplay() {

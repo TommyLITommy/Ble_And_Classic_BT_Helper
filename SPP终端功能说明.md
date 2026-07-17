@@ -52,7 +52,7 @@ maxOf(ime.bottom, navBars.bottom)
 
 ### 3.2 同步保存
 
-- 勾选「同步保存接收数据」后，接收内容边显示边写文件
+- 勾选「同步保存接收数据」后，**界面显示什么就写什么到文件**（含 HEX 帧、`sleep_upload_data_t` 解析、IMU/Touch 等协议打印、发送回显、状态行）
 - 路径：`Download/SPP_RX/`
 - 命名：
   - 有文件名前缀：`前缀_yyyyMMdd_HHmmss.txt`
@@ -61,6 +61,7 @@ maxOf(ime.bottom, navBars.bottom)
 - 已去掉与 checkbox 重复的「保存文件」按钮
 - 顶部文件名输入框作为同步保存前缀，支持历史记录（最近约 10 条）
 - **Update** 按钮：改名前缀后点 Update，关闭当前文件并新建继续写
+- 离开 Terminal 页面但勾选仍开启时：Service 侧会用兜底格式继续写（尽量含 Sleep 解析）；回到 Terminal 后仍以界面文本为准
 
 ### 3.3 后台 / 息屏
 
