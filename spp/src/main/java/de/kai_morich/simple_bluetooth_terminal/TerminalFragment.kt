@@ -918,6 +918,10 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
                 spn.append("accel_x:${accel[0]}, accel_y:${accel[1]}, accel_z:${accel[2]}\n")
                 spn.append("gyro_x:${gyro[0]}, gyro_y:${gyro[1]}, gyro_z:${gyro[2]}\n")
             }
+            frame.group() == 0xFF && subId == 0x08 &&
+                payloadLength == SleepUploadDataParser.PAYLOAD_SIZE -> {
+                spn.append(SleepUploadDataParser(payload).toStringRepresentation()).append('\n')
+            }
             frame.group() == 0x04 && subId == 0x26 && payloadLength >= 8 -> {
                 val buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
                 val offset = ShortArray(2) { buffer.short }

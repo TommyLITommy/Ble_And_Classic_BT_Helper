@@ -7,8 +7,26 @@ import java.util.Locale
 class SleepUploadDataParser(data: ByteArray) {
 
     companion object {
-        const val PAYLOAD_SIZE = 66
+        /** packed sleep_upload_data_t: 66 + sleep_record_len(1) + sleep_record(20) */
+        const val PAYLOAD_SIZE = 87
+        private const val SLEEP_RECORD_BYTES = 20
+        private const val SLEEP_RECORD_ENTRY_SIZE = 4
+        private const val SLEEP_RECORD_MAX_COUNT = SLEEP_RECORD_BYTES / SLEEP_RECORD_ENTRY_SIZE
     }
+
+    /** Valid sleep_record_len values from algorithm: 0,4,8,12,16,20 (bytes). */
+    private fun validEntryCount(sleepRecordLen: Int): Int {
+        if (sleepRecordLen !in 0..SLEEP_RECORD_BYTES) return 0
+        if (sleepRecordLen % SLEEP_RECORD_ENTRY_SIZE != 0) return 0
+        return sleepRecordLen / SLEEP_RECORD_ENTRY_SIZE
+    }
+
+    private data class SleepRecordEntry(
+        val stage: Int,
+        val posture: Int,
+        val headerValid: Boolean,
+        val footerValid: Boolean,
+    )
 
     private data class SleepUploadData(
         val sequence: Int,
@@ -28,6 +46,8 @@ class SleepUploadDataParser(data: ByteArray) {
         val pnn50: Int,
         val sdnn180: Float,
         val hrvScore: Float,
+        val sleepRecordLen: Int,
+        val sleepRecords: List<SleepRecordEntry>,
     )
 
     private val payload: SleepUploadData?
@@ -55,6 +75,8 @@ class SleepUploadDataParser(data: ByteArray) {
         val pnn50 = buffer.get().toInt()
         val sdnn180 = buffer.float
         val hrvScore = buffer.float
+        val sleepRecordLen = buffer.get().toInt() and 0xFF
+        val sleepRecords = parseSleepRecords(buffer, validEntryCount(sleepRecordLen))
         return SleepUploadData(
             sequence,
             valid,
@@ -73,7 +95,26 @@ class SleepUploadDataParser(data: ByteArray) {
             pnn50,
             sdnn180,
             hrvScore,
+            sleepRecordLen,
+            sleepRecords,
         )
+    }
+
+    /** Each entry: 'D' + stage + posture + '\\n'. Always consume full 20-byte array. */
+    private fun parseSleepRecords(buffer: ByteBuffer, validCount: Int): List<SleepRecordEntry> {
+        val all = List(SLEEP_RECORD_MAX_COUNT) {
+            val header = buffer.get().toInt() and 0xFF
+            val stage = buffer.get().toInt() and 0xFF
+            val posture = buffer.get().toInt() and 0xFF
+            val footer = buffer.get().toInt() and 0xFF
+            SleepRecordEntry(
+                stage = stage,
+                posture = posture,
+                headerValid = header == 'D'.code,
+                footerValid = footer == '\n'.code,
+            )
+        }
+        return all.take(validCount)
     }
 
     fun printData() {
@@ -81,7 +122,7 @@ class SleepUploadDataParser(data: ByteArray) {
     }
 
     fun toStringRepresentation(): String {
-        val data = payload ?: return "sleep_upload_data_t size mismatch"
+        val data = payload ?: return "sleep_upload_data_t size mismatch (expect $PAYLOAD_SIZE)"
         return buildString {
             append("=== MM Payload (sleep_upload_data_t) ===\n")
             appendField("sequence", data.sequence)
@@ -101,7 +142,35 @@ class SleepUploadDataParser(data: ByteArray) {
             appendField("pNN50", data.pnn50)
             appendField("SDNN180", String.format(Locale.US, "%.6f", data.sdnn180))
             appendField("HRV_Score", String.format(Locale.US, "%.6f", data.hrvScore))
+            appendField("sleep_record_len", data.sleepRecordLen)
+            if (data.sleepRecords.isNotEmpty()) {
+                append("sleep_record:\n")
+                data.sleepRecords.forEachIndexed { index, entry ->
+                    append("  [$index] ").append(formatSleepRecord(entry)).append('\n')
+                }
+            }
         }
+    }
+
+    private fun formatSleepRecord(entry: SleepRecordEntry): String {
+        val marker = if (entry.headerValid && entry.footerValid) "" else " (invalid frame)"
+        return "stage=${formatSleepStage(entry.stage)}, posture=${formatSleepPosture(entry.posture)}$marker"
+    }
+
+    private fun formatSleepStage(stage: Int): String = when (stage) {
+        0 -> "0(Awake/清醒)"
+        1 -> "1(Core/核心睡眠)"
+        2 -> "2(Deep/深层睡眠)"
+        3 -> "3(REM/快速眼动期)"
+        else -> "$stage(Unknown)"
+    }
+
+    private fun formatSleepPosture(posture: Int): String = when (posture) {
+        1 -> "1(Supine/面上)"
+        2 -> "2(Left/侧左)"
+        3 -> "3(Right/侧右)"
+        4 -> "4(Prone/伏)"
+        else -> "$posture(Unknown)"
     }
 
     private fun formatEarBudState(state: Int): String =
