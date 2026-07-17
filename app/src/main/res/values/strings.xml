@@ -52,6 +52,7 @@
     <string name="detail_toggle_log">折叠或收起</string>
     <string name="detail_receive_title">接收数据</string>
     <string name="detail_receive_clear">清除</string>
+    <string name="detail_sleep_record">Sleep Record</string>
     <string name="detail_receive_empty">开启 Notify 后，设备上报的数据将显示在此处</string>
     <string name="detail_receive_save">保存到手机</string>
     <string name="detail_receive_save_idle">未开启保存</string>

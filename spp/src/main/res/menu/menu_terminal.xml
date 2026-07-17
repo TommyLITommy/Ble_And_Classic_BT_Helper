@@ -7,6 +7,10 @@
         android:title="Clear"
         app:showAsAction="always" />
     <item
+        android:id="@+id/sleep_record"
+        android:title="Sleep Record"
+        app:showAsAction="ifRoom" />
+    <item
         android:id="@+id/newline"
         android:title="Newline"
         app:showAsAction="never" />

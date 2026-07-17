@@ -121,6 +121,19 @@ class SleepUploadDataParser(data: ByteArray) {
         println(toStringRepresentation())
     }
 
+    /** Non-null only when sleep_record_len maps to at least one valid group. */
+    fun sleepRecordsContentOrNull(): String? {
+        val data = payload ?: return null
+        if (data.sleepRecords.isEmpty()) return null
+        return buildString {
+            append("len=").append(data.sleepRecordLen).append('\n')
+            data.sleepRecords.forEachIndexed { index, entry ->
+                append('[').append(index).append("] ")
+                append(formatSleepRecordCompact(entry)).append('\n')
+            }
+        }.trimEnd()
+    }
+
     fun toStringRepresentation(): String {
         val data = payload ?: return "sleep_upload_data_t size mismatch (expect $PAYLOAD_SIZE)"
         return buildString {
@@ -152,9 +165,30 @@ class SleepUploadDataParser(data: ByteArray) {
         }
     }
 
+    private fun formatSleepRecordCompact(entry: SleepRecordEntry): String {
+        val marker = if (entry.headerValid && entry.footerValid) "" else "(无效)"
+        return "stage=${formatSleepStageZh(entry.stage)},pos=${formatSleepPostureZh(entry.posture)}$marker"
+    }
+
     private fun formatSleepRecord(entry: SleepRecordEntry): String {
         val marker = if (entry.headerValid && entry.footerValid) "" else " (invalid frame)"
         return "stage=${formatSleepStage(entry.stage)}, posture=${formatSleepPosture(entry.posture)}$marker"
+    }
+
+    private fun formatSleepStageZh(stage: Int): String = when (stage) {
+        0 -> "清醒"
+        1 -> "核心睡眠"
+        2 -> "深层睡眠"
+        3 -> "快速眼动期"
+        else -> "未知($stage)"
+    }
+
+    private fun formatSleepPostureZh(posture: Int): String = when (posture) {
+        1 -> "面上"
+        2 -> "侧左"
+        3 -> "侧右"
+        4 -> "伏"
+        else -> "未知($posture)"
     }
 
     private fun formatSleepStage(stage: Int): String = when (stage) {

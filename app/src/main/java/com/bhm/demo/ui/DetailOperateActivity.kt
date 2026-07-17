@@ -41,6 +41,7 @@ import com.bhm.demo.entity.CharacteristicNode
 import com.bhm.demo.entity.LogEntity
 import com.bhm.demo.entity.OperateType
 import com.bhm.demo.entity.PresetWriteCommand
+import de.kai_morich.simple_bluetooth_terminal.SleepRecordHistoryDialogFragment
 import com.bhm.demo.utils.BleReceiveDataSaver
 import com.bhm.demo.utils.PresetWriteCommandStore
 import com.bhm.demo.vm.DetailViewModel
@@ -268,6 +269,13 @@ class DetailOperateActivity : BaseActivity<DetailViewModel, ActivityDetailBindin
             receiveText.clear()
             viewBinding.tvReceiveData.text = ""
             viewModel.clearReceiveData()
+        }
+
+        viewBinding.btnSleepRecord.setOnClickListener {
+            if (ViewUtil.isInvalidClick(it)) {
+                return@setOnClickListener
+            }
+            SleepRecordHistoryDialogFragment.show(supportFragmentManager)
         }
 
         viewBinding.switchSaveReceive.setOnCheckedChangeListener { _: CompoundButton, isChecked ->

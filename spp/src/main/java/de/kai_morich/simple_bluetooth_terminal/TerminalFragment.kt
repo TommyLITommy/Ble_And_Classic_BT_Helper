@@ -681,6 +681,10 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
                 clearReceiveDisplay()
                 true
             }
+            R.id.sleep_record -> {
+                SleepRecordHistoryDialogFragment.show(parentFragmentManager)
+                true
+            }
             R.id.newline -> {
                 val newlineNames = resources.getStringArray(R.array.newline_names)
                 val newlineValues = resources.getStringArray(R.array.newline_values)
@@ -920,7 +924,9 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
             }
             frame.group() == 0xFF && subId == 0x08 &&
                 payloadLength == SleepUploadDataParser.PAYLOAD_SIZE -> {
-                spn.append(SleepUploadDataParser(payload).toStringRepresentation()).append('\n')
+                val sleepParser = SleepUploadDataParser(payload)
+                spn.append(sleepParser.toStringRepresentation()).append('\n')
+                SleepRecordHistoryStore.addFromParser(sleepParser)
             }
             frame.group() == 0x04 && subId == 0x26 && payloadLength >= 8 -> {
                 val buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)

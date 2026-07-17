@@ -3,6 +3,7 @@ package com.bhm.demo.utils
 import com.bhm.ble.utils.BleUtil
 import de.kai_morich.simple_bluetooth_terminal.PrivateProtocol
 import de.kai_morich.simple_bluetooth_terminal.PrivateProtocolStreamDecoder
+import de.kai_morich.simple_bluetooth_terminal.SleepRecordHistoryStore
 import de.kai_morich.simple_bluetooth_terminal.SleepUploadDataParser
 import de.kai_morich.simple_bluetooth_terminal.TextUtil
 import java.text.SimpleDateFormat
@@ -46,7 +47,9 @@ class BleReceiveFormatter {
         if (frame.group() == 0xFF && frame.subId() == 0x08 &&
             payload.size == SleepUploadDataParser.PAYLOAD_SIZE
         ) {
-            sb.append(SleepUploadDataParser(payload).toStringRepresentation()).append('\n')
+            val parser = SleepUploadDataParser(payload)
+            sb.append(parser.toStringRepresentation()).append('\n')
+            SleepRecordHistoryStore.addFromParser(parser)
         }
         sb.append('\n')
     }
