@@ -230,6 +230,8 @@ class TerminalFragment : Fragment(), ServiceConnection, SerialListener,
         presetCommands["开启IMU校准Bypass"] = "3A 5E 20 04 2c 09 00 01 AA 11 22 33 44 55 66 77 88"
         presetCommands["关闭IMU校准Bypass"] = "3A 5E 20 04 2c 09 00 00 AA 11 22 33 44 55 66 77 88"
         presetCommands["IMU测试"] = "3A 5E 20 04 2f 09 00 00 AA 11 22 33 44 55 66 77 88"
+        presetCommands["打开touch数据上传"] = "3A 5E 20 04 22 0A 00 01 00 AA 11 22 33 44 55 66 77 88"
+        presetCommands["关闭touch数据上传"] = "3A 5E 20 04 22 0A 00 00 00 AA 11 22 33 44 55 66 77 88"
         presetCommands["打开ENC算法"] = "3A 5E 20 05 01 09 00 01 AA 11 22 33 44 55 66 77 88"
         presetCommands["关闭ENC算法"] = "3A 5E 20 05 01 09 00 00 AA 11 22 33 44 55 66 77 88"
         presetCommands["切换Talk"] = "3A 5E 20 05 08 09 00 00 AA 11 22 33 44 55 66 77 88"
